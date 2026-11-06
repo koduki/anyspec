@@ -14,7 +14,7 @@ module Anyspec
         raise Anyspec::Error, "namespace is required for #{ADAPTER_TYPE}" unless namespace
         raise Anyspec::Error, "bucket_name or name is required for #{ADAPTER_TYPE}" unless bucket_name
 
-        client = OCI::ObjectStorage::ObjectStorageClient.new(config: config.oci_client_config)
+        client = create_client(OCI::ObjectStorage::ObjectStorageClient)
         response = client.get_bucket(namespace, bucket_name)
 
         extract_bucket(response.data)

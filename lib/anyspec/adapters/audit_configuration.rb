@@ -11,7 +11,7 @@ module Anyspec
         compartment_id = spec['compartment_id']
         raise Anyspec::Error, "compartment_id is required for #{ADAPTER_TYPE}" unless compartment_id
 
-        client = OCI::Audit::AuditClient.new(config: config.oci_client_config)
+        client = create_client(OCI::Audit::AuditClient)
         response = client.get_configuration(compartment_id)
 
         extract_configuration(response.data)

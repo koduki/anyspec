@@ -12,9 +12,10 @@ module Anyspec
         error: '⚠️'
       }.freeze
 
-      def initialize(results, summary)
+      def initialize(results, summary, run_metadata: {})
         @results = results
         @summary = summary
+        @run_metadata = run_metadata
       end
 
       def generate
