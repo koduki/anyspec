@@ -55,6 +55,14 @@ RSpec.describe Anyspec::SpecLoader do
     end
 
     context 'with a directory' do
+      before do
+        ENV['TEST_COMPARTMENT_ID'] = 'ocid1.compartment.oc1..test'
+      end
+
+      after do
+        ENV.delete('TEST_COMPARTMENT_ID')
+      end
+
       it 'loads all YAML files recursively' do
         specs = loader.load(fixtures_path)
 
