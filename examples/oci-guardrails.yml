@@ -1,0 +1,40 @@
+# OCI ガードレール設定チェック
+# このファイルは OCI のセキュリティ設定が期待通りであるかを検証します
+
+- id: oci-cloud-guard-enabled
+  title: Cloud Guard が有効である
+  intent: テナンシ全体の脅威検知を止められないようにする
+  note: 無効化は原則禁止。例外は期間付きで note と PR に残す
+  owner: security
+  cloud: oci
+  type: cloud_guard_configuration
+  compartment_id: ${OCI_TENANCY_OCID}
+  expect:
+    status: ENABLED
+
+- id: oci-audit-retention-365
+  title: 監査ログ保持期間が365日以上
+  intent: コンプライアンス要件として1年分のログ保持が必要
+  note: 法的要件。短縮不可
+  owner: compliance
+  cloud: oci
+  type: audit_configuration
+  compartment_id: ${OCI_TENANCY_OCID}
+  expect:
+    retention_period_days: 365
+
+- id: oci-password-policy-minimum-length
+  title: パスワード最小長が14文字以上
+  intent: ブルートフォース攻撃への耐性を確保する
+  note: セキュリティポリシー準拠
+  owner: security
+  cloud: oci
+  type: identity_authentication_policy
+  compartment_id: ${OCI_TENANCY_OCID}
+  expect:
+    password_policy:
+      minimum_password_length: 14
+      is_uppercase_characters_required: true
+      is_lowercase_characters_required: true
+      is_numeric_characters_required: true
+      is_special_characters_required: true

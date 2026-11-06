@@ -1,0 +1,8 @@
+- id: test-env-interpolation
+  title: Environment Variable Test
+  intent: 環境変数の補間をテストする
+  cloud: oci
+  type: cloud_guard_configuration
+  compartment_id: ${TEST_COMPARTMENT_ID}
+  expect:
+    status: ENABLED

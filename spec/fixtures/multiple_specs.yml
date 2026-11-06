@@ -1,0 +1,18 @@
+- id: spec-one
+  title: First Spec
+  intent: 最初のテストスペック
+  cloud: oci
+  type: cloud_guard_configuration
+  compartment_id: ocid1.tenancy.oc1..test
+  expect:
+    status: ENABLED
+
+- id: spec-two
+  title: Second Spec
+  intent: 二番目のテストスペック
+  note: 追加の備考
+  cloud: oci
+  type: audit_configuration
+  compartment_id: ocid1.tenancy.oc1..test
+  expect:
+    retention_period_days: 365

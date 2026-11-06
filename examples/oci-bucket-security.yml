@@ -1,0 +1,28 @@
+# OCI Object Storage バケットセキュリティチェック
+# 重要データを格納するバケットの設定を検証します
+
+- id: oci-sensitive-bucket-private
+  title: 機密データバケットが非公開である
+  intent: 機密データの誤公開を防止する
+  note: このバケットは顧客情報を含むため、絶対に公開設定にしない
+  owner: data-platform
+  cloud: oci
+  type: object_storage_bucket
+  namespace: ${OCI_NAMESPACE}
+  bucket_name: sensitive-data-bucket
+  expect:
+    public_access_type: NoPublicAccess
+    versioning: Enabled
+
+- id: oci-backup-bucket-readonly
+  title: バックアップバケットが読み取り専用である
+  intent: バックアップデータの誤削除・改ざんを防止する
+  note: 復旧時のみ一時的に書き込み可能に変更。変更履歴は PR で管理
+  owner: ops
+  cloud: oci
+  type: object_storage_bucket
+  namespace: ${OCI_NAMESPACE}
+  bucket_name: backup-bucket
+  expect:
+    public_access_type: NoPublicAccess
+    is_read_only: true

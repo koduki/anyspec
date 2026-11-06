@@ -1,0 +1,9 @@
+- id: test-cloud-guard
+  title: Test Cloud Guard
+  intent: テスト用のCloud Guard設定
+  note: これはテスト用です
+  cloud: oci
+  type: cloud_guard_configuration
+  compartment_id: ocid1.tenancy.oc1..test
+  expect:
+    status: ENABLED
