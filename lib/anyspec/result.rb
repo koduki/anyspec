@@ -5,11 +5,13 @@ module Anyspec
     STATUSES = %i[pass fail error].freeze
 
     attr_reader :id, :title, :intent, :note, :owner, :status, :expected, :actual,
-                :message, :mismatches, :duration_ms, :error_details
+                :message, :mismatches, :duration_ms, :error_details, :source_file,
+                :waiver_until
 
     def initialize(id:, title:, intent: nil, note: nil, owner: nil, status:,
                    expected:, actual:, message: nil, mismatches: nil,
-                   duration_ms: nil, error_details: nil)
+                   duration_ms: nil, error_details: nil, source_file: nil,
+                   waiver_until: nil)
       raise ArgumentError, "Invalid status: #{status}" unless STATUSES.include?(status)
 
       @id = id
@@ -24,6 +26,8 @@ module Anyspec
       @mismatches = mismatches
       @duration_ms = duration_ms
       @error_details = error_details
+      @source_file = source_file
+      @waiver_until = waiver_until
     end
 
     def pass?
@@ -36,6 +40,10 @@ module Anyspec
 
     def error?
       @status == :error
+    end
+
+    def waived?
+      @waiver_until && @message&.include?('Waiver active')
     end
 
     def to_h
@@ -51,7 +59,9 @@ module Anyspec
         message: @message,
         mismatches: @mismatches,
         duration_ms: @duration_ms,
-        error_details: @error_details
+        error_details: @error_details,
+        source_file: @source_file,
+        waiver_until: @waiver_until
       }.compact
     end
   end

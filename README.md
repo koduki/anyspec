@@ -8,14 +8,18 @@
 ## 特徴
 
 - **YAML ベースの期待値定義**: 人間が読みやすい形式で設定の期待値を管理
+- **動く設計書**: スペック YAML とチェック結果レポートが設計意図を文書化
 - **Git 管理可能**: 変更履歴を PR でレビュー・追跡
 - **複数の出力形式**: 人間向け Markdown と機械処理用 JSON の両方を出力
 - **拡張可能なアダプター**: 新しいリソースタイプを容易に追加可能
 - **環境変数のサポート**: `${VAR}` 形式で機密情報を外部化
 - **CI/CD 対応**: 終了コードで pass/fail/error を区別し、定期実行や PR チェックに対応
+- **GitHub Actions 統合**: Job Summary、ファイルアノテーション、GITHUB_OUTPUT への自動出力
+- **オフライン検証**: `validate` コマンドで OCI 接続なしにスペックを検証
 - **比較演算子**: `$gte`, `$lte`, `$in` などで柔軟な期待値を定義
-- **一時的なウェイバー**: `until:` で期限付きの例外を設定
+- **一時的なウェイバー**: `until:` で期限付きの例外を設定 (レポートで明示)
 - **複数の認証方式**: API キー、インスタンスプリンシパル、リソースプリンシパルに対応
+- **クロスプラットフォーム**: Linux、macOS、Windows で動作
 
 ## インストール
 
@@ -33,22 +37,60 @@ bundle install
 bin/anyspec check examples/oci-guardrails.yml
 ```
 
+### オフライン検証 (validate)
+
+OCI に接続せずにスペックファイルの構文とフィールドを検証します。
+
+```bash
+bin/anyspec validate examples/
+```
+
+validate コマンドは以下をチェックします:
+- 必須フィールドの存在 (`id`, `title`, `cloud`, `type`, `expect`)
+- 未知のアダプタータイプ
+- 重複した ID
+- 無効な `until` 日付形式
+- 参照されている環境変数の設定有無
+
+CI の早期チェックや PR レビュー前の検証に便利です。
+
 ### オプション
 
 ```bash
 bin/anyspec check <spec.yml|directory> [options]
+bin/anyspec validate <spec.yml|directory>
 
 Options:
   --out-dir DIR       結果の出力先ディレクトリ (デフォルト: artifacts)
   --profile NAME      OCI 設定プロファイル名 (デフォルト: DEFAULT)
   --config PATH       OCI 設定ファイルのパス (デフォルト: ~/.oci/config)
   --auth-mode MODE    認証方式: config_file (デフォルト), instance_principal, resource_principal
+  --fail-on MODE      終了コードの制御 (下記参照)
   -h, --help          ヘルプを表示
   -v, --version       バージョンを表示
 
 環境変数:
   OCI_AUTH_MODE       認証方式を上書き
   OCI_REGION          インスタンス/リソースプリンシパル認証時のリージョン
+```
+
+### --fail-on オプション
+
+終了コードの振る舞いを制御します:
+
+| 値 | 動作 |
+|---|---|
+| (なし) | デフォルト: fail でも error でも非ゼロ終了 |
+| `fail` | ドリフト検知時のみ非ゼロ (exit 1)。error のみの場合は exit 2 |
+| `error` | 取得エラー時のみ非ゼロ (exit 2)。ドリフトのみは exit 0 |
+| `never` | 常に exit 0 (レポートと出力は生成) |
+
+```bash
+# ドリフトを記録するが CI を止めない
+bin/anyspec check specs/ --fail-on never
+
+# 取得エラーは無視、ドリフトだけ CI を止める
+bin/anyspec check specs/ --fail-on fail
 ```
 
 ### ディレクトリ指定
@@ -58,6 +100,15 @@ Options:
 ```bash
 bin/anyspec check specs/
 ```
+
+### クロスプラットフォーム対応
+
+anyspec は Linux、macOS、Windows で動作します。
+
+- **Linux/macOS**: `~/.oci/config` がデフォルトの設定ファイルパス
+- **Windows**: `%USERPROFILE%\.oci\config` がデフォルトの設定ファイルパス
+
+Ruby の `Dir.home` と `File.join` を使用しているため、OS に応じたパス解決が自動で行われます。
 
 ## 終了コード
 
@@ -402,21 +453,81 @@ bin/anyspec check specs/ --auth-mode resource_principal
 bundle exec rspec spec/anyspec
 ```
 
+CI では Ubuntu、macOS、Windows の全プラットフォームでテストを実行しています。
+
 ## CI/CD での利用
 
 ### GitHub Actions
 
+anyspec は GitHub Actions と深く統合されており、`GITHUB_ACTIONS=true` の場合に自動的に以下を行います:
+
+- `$GITHUB_STEP_SUMMARY` に Markdown レポートを追記 (Job Summary として表示)
+- `::error file=...` / `::notice file=...` ワークフローコマンドでファイルにアノテーション
+- `$GITHUB_OUTPUT` に `pass`, `fail`, `error`, `exit_code` を出力
+- JSON メタデータに CI コンテキスト (`github_sha`, `github_run_id`, `github_run_url` など) を含める
+
+レポートには `intent`, `owner`, `note` が含まれ、ウェイバー中の項目は「設計上の例外」として明示されます。これにより、YAML スペックと出力レポートが「動く設計書」として機能します。
+
+#### GitHub-hosted ランナーでの認証
+
+**重要**: `ubuntu-latest`, `macos-latest`, `windows-latest` などの GitHub-hosted ランナーでは `--auth-mode instance_principal` は使用できません。インスタンスプリンシパルは OCI Compute インスタンス上でのみ動作します。
+
+GitHub-hosted ランナーでは以下の方法を使用してください:
+
+**方法 1: GitHub OIDC + OCI Workload Identity Federation (推奨)**
+
+GitHub の OIDC トークンを OCI IAM で Resource Principal Session Token (RPST) に交換します。
+
+1. OCI IAM で Workload Identity Federation を設定
+   - issuer: `https://token.actions.githubusercontent.com`
+   - 参照: [OCI JWT to RPST Workload Identity Federation](https://docs.oracle.com/en-us/iaas/Content/Identity/api-getstarted/token_exchange_grant_type_workload_id-federation.htm)
+
+2. GitHub Actions ワークフローで OIDC トークンを取得し、OCI API で RPST に交換
+
+3. `--auth-mode resource_principal` で anyspec を実行
+
+```yaml
+permissions:
+  contents: read
+  id-token: write  # OIDC トークン取得に必要
+```
+
+**方法 2: 設定ファイル + シークレット (フォールバック)**
+
+GitHub Secrets から OCI 設定ファイルと秘密鍵を組み立てます。
+
+```yaml
+- name: Setup OCI config
+  run: |
+    mkdir -p $HOME/.oci
+    echo "${{ secrets.OCI_CONFIG }}" > $HOME/.oci/config
+    echo "${{ secrets.OCI_KEY }}" > $HOME/.oci/oci_api_key.pem
+    chmod 600 $HOME/.oci/config $HOME/.oci/oci_api_key.pem
+  shell: bash
+```
+
+**注意**: 秘密鍵をログに出力しないでください。`set -x` や `echo` での表示は避けてください。
+
+#### 完全なワークフロー例
+
 ```yaml
 name: OCI Guardrails Check
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 9 * * *'  # 毎日 9:00 UTC
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  # id-token: write  # OIDC を使う場合はコメント解除
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # macos-latest, windows-latest でも動作
     steps:
       - uses: actions/checkout@v4
 
@@ -426,10 +537,18 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
 
+      - name: Setup OCI config
+        run: |
+          mkdir -p $HOME/.oci
+          echo "${{ secrets.OCI_CONFIG }}" > $HOME/.oci/config
+          echo "${{ secrets.OCI_KEY }}" > $HOME/.oci/oci_api_key.pem
+          chmod 600 $HOME/.oci/config $HOME/.oci/oci_api_key.pem
+        shell: bash
+
       - name: Run anyspec
+        id: anyspec
         run: bundle exec ruby -Ilib bin/anyspec check specs/
         env:
-          OCI_AUTH_MODE: instance_principal  # または設定ファイルを使う場合は削除
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_NAMESPACE: ${{ secrets.OCI_NAMESPACE }}
 
@@ -439,15 +558,28 @@ jobs:
         with:
           name: anyspec-results
           path: artifacts/
+
+      # GITHUB_OUTPUT を使った後続ステップの例
+      - name: Check drift status
+        if: always()
+        run: |
+          echo "Drift detected: ${{ steps.anyspec.outputs.fail }}"
+          echo "Errors occurred: ${{ steps.anyspec.outputs.error }}"
 ```
 
-### OCI での定期実行
+### OCI セルフホストランナーでの認証
 
-OCI Compute インスタンスや OKE で定期実行する場合、インスタンスプリンシパルを使用すれば API キーの管理が不要です。
+OCI Compute インスタンスや OKE で実行するセルフホストランナーでは、インスタンスプリンシパルまたはリソースプリンシパルが使用できます。
+
+| 実行環境 | 認証方式 |
+|---------|---------|
+| OCI Compute インスタンス | `--auth-mode instance_principal` |
+| OKE Pod (Workload Identity) | `--auth-mode resource_principal` |
+| OCI Functions | `--auth-mode resource_principal` |
 
 1. ダイナミックグループを作成し、インスタンスまたは OKE ワークロードを含める
 2. 必要なリソースへの読み取り権限を付与するポリシーを作成
-3. `--auth-mode instance_principal` または `--auth-mode resource_principal` で実行
+3. 適切な `--auth-mode` で実行
 
 ```bash
 # crontab での例

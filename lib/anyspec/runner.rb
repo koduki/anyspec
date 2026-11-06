@@ -58,6 +58,8 @@ module Anyspec
 
       duration_ms = calculate_duration_ms(start_time)
 
+      source_file = spec['_source_file']
+
       if matched
         Result.new(
           id: spec['id'],
@@ -69,7 +71,8 @@ module Anyspec
           expected: expected,
           actual: filter_actual(actual, expected),
           message: nil,
-          duration_ms: duration_ms
+          duration_ms: duration_ms,
+          source_file: source_file
         )
       elsif waiver_active?(spec)
         waiver_msg = "Waiver active until #{spec['until']}. Mismatch: #{format_mismatches(mismatches)}"
@@ -84,7 +87,9 @@ module Anyspec
           actual: filter_actual(actual, expected),
           message: waiver_msg,
           mismatches: mismatches,
-          duration_ms: duration_ms
+          duration_ms: duration_ms,
+          source_file: source_file,
+          waiver_until: spec['until']&.to_s
         )
       else
         Result.new(
@@ -98,7 +103,8 @@ module Anyspec
           actual: filter_actual(actual, expected),
           message: format_mismatches(mismatches),
           mismatches: mismatches,
-          duration_ms: duration_ms
+          duration_ms: duration_ms,
+          source_file: source_file
         )
       end
     rescue Anyspec::UnknownAdapterError => e
@@ -114,7 +120,8 @@ module Anyspec
         actual: nil,
         message: e.message,
         duration_ms: duration_ms,
-        error_details: { error_class: e.class.name }
+        error_details: { error_class: e.class.name },
+        source_file: spec['_source_file']
       )
     rescue StandardError => e
       duration_ms = calculate_duration_ms(start_time)
@@ -129,7 +136,8 @@ module Anyspec
         actual: nil,
         message: "Fetch error: #{e.message}",
         duration_ms: duration_ms,
-        error_details: extract_error_details(e)
+        error_details: extract_error_details(e),
+        source_file: spec['_source_file']
       )
     end
 

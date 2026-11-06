@@ -57,6 +57,9 @@ module Anyspec
           metadata[:spec_paths] = @run_metadata[:spec_paths]
         end
 
+        ci_context = GitHubActionsReporter.ci_context
+        metadata[:ci] = ci_context unless ci_context.empty?
+
         metadata
       end
     end

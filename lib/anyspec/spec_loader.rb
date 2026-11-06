@@ -24,12 +24,15 @@ module Anyspec
     end
 
     def load_file(path)
-      @loaded_paths << File.expand_path(path)
+      expanded_path = File.expand_path(path)
+      @loaded_paths << expanded_path
       content = File.read(path)
       data = YAML.safe_load(content, permitted_classes: [Symbol])
       items = data.is_a?(Array) ? data : [data]
       items.each do |item|
-        @specs << interpolate_env_vars(item)
+        spec = interpolate_env_vars(item)
+        spec['_source_file'] = expanded_path
+        @specs << spec
       end
     end
 
