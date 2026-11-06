@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/koduki/anyspec/actions/workflows/ci.yml/badge.svg)](https://github.com/koduki/anyspec/actions/workflows/ci.yml)
 
-**anyspec** は Oracle Cloud Infrastructure (OCI) の設定値を期待値と比較する軽量なチェッカーツールです。IaC ツールではなく、セキュリティ・ガードレール設定が意図しない変更を受けていないかを検知するために設計されています。
+**anyspec** は Oracle Cloud Infrastructure (OCI) の設定値を期待値と比較する軽量なチェッカーツールです。IaC ツールではなく、セキュリティ・ガードレール設定など意図的にIaCから外しているクラウドのパラメータに対して、設定値のコード化及び意図しない変更を受けていないかを検知するために設計されています。このチェックツールで使われる期待値や出力されるレポートは「動く設計書」としての役割を持ちます。
 
 ## 特徴
 
