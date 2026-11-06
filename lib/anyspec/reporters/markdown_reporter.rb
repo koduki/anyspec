@@ -74,9 +74,19 @@ module Anyspec
         lines << ""
         lines << "**ステータス**: #{status_ja}"
 
+        if result.waived?
+          lines << ""
+          lines << "**ウェイバー**: #{result.waiver_until} まで設計上の例外として許容"
+        end
+
         if result.intent
           lines << ""
           lines << "**意図**: #{result.intent}"
+        end
+
+        if result.owner
+          lines << ""
+          lines << "**担当**: #{result.owner}"
         end
 
         if result.note
@@ -105,6 +115,23 @@ module Anyspec
             lines << ""
             lines << "**メッセージ**: #{result.message}"
           end
+        elsif result.waived?
+          lines << ""
+          lines << "<details>"
+          lines << "<summary>ウェイバー中の不一致詳細</summary>"
+          lines << ""
+          lines << "#### 期待値"
+          lines << ""
+          lines << "```json"
+          lines << JSON.pretty_generate(result.expected)
+          lines << "```"
+          lines << ""
+          lines << "#### 実際の値"
+          lines << ""
+          lines << "```json"
+          lines << JSON.pretty_generate(result.actual)
+          lines << "```"
+          lines << "</details>"
         end
 
         lines.join("\n")

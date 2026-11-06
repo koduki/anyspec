@@ -8,7 +8,13 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        ruby-version: ['3.2']
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -16,7 +22,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
 
       - name: Run tests
@@ -26,3 +32,9 @@ jobs:
         run: |
           bundle exec ruby -Ilib bin/anyspec --version
           bundle exec ruby -Ilib bin/anyspec --help
+
+      - name: Validate example specs (offline)
+        run: bundle exec ruby -Ilib bin/anyspec validate examples/
+        env:
+          OCI_TENANCY_OCID: ocid1.tenancy.oc1..test
+          OCI_NAMESPACE: test-namespace

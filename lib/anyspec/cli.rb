@@ -6,6 +6,7 @@ require 'fileutils'
 module Anyspec
   class CLI
     DEFAULT_OUT_DIR = 'artifacts'
+    FAIL_ON_OPTIONS = %w[fail error never].freeze
 
     def initialize(argv)
       @argv = argv
@@ -13,7 +14,8 @@ module Anyspec
         out_dir: DEFAULT_OUT_DIR,
         profile: 'DEFAULT',
         config_path: nil,
-        auth_mode: nil
+        auth_mode: nil,
+        fail_on: nil
       }
     end
 
@@ -24,6 +26,8 @@ module Anyspec
       case command
       when 'check'
         run_check
+      when 'validate'
+        run_validate
       when 'version', '-v', '--version'
         puts "anyspec #{Anyspec::VERSION}"
         0
@@ -44,9 +48,10 @@ module Anyspec
         opts.banner = "Usage: anyspec <command> [options]"
         opts.separator ""
         opts.separator "Commands:"
-        opts.separator "  check <spec.yml|dir>  Run checks against OCI resources"
-        opts.separator "  version               Show version"
-        opts.separator "  help                  Show this help"
+        opts.separator "  check <spec.yml|dir>     Run checks against OCI resources"
+        opts.separator "  validate <spec.yml|dir>  Validate spec files offline (no OCI access)"
+        opts.separator "  version                  Show version"
+        opts.separator "  help                     Show this help"
         opts.separator ""
         opts.separator "Options:"
 
@@ -64,6 +69,14 @@ module Anyspec
 
         opts.on('--auth-mode MODE', 'OCI auth mode: config_file, instance_principal, resource_principal') do |mode|
           @options[:auth_mode] = mode
+        end
+
+        opts.on('--fail-on MODE', 'When to exit non-zero: fail (drift), error (fetch issues), never') do |mode|
+          unless FAIL_ON_OPTIONS.include?(mode)
+            $stderr.puts "Error: Invalid --fail-on value '#{mode}'. Must be one of: #{FAIL_ON_OPTIONS.join(', ')}"
+            exit 1
+          end
+          @options[:fail_on] = mode
         end
 
         opts.on('-h', '--help', 'Show this help') do
@@ -119,9 +132,15 @@ module Anyspec
 
       write_reports(results, summary, run_metadata)
       print_progress(results)
-      print_summary(summary, runner.exit_code)
 
-      runner.exit_code
+      base_exit_code = runner.exit_code
+      process_exit_code = calculate_exit_code(base_exit_code)
+
+      handle_github_actions(results, summary, run_metadata, base_exit_code)
+
+      print_summary(summary, base_exit_code)
+
+      process_exit_code
     rescue Anyspec::Error => e
       $stderr.puts "Error: #{e.message}"
       2
@@ -129,6 +148,63 @@ module Anyspec
       $stderr.puts "Unexpected error: #{e.message}"
       $stderr.puts e.backtrace.first(5).join("\n") if ENV['DEBUG']
       2
+    end
+
+    def calculate_exit_code(base_exit_code)
+      return base_exit_code unless @options[:fail_on]
+
+      case @options[:fail_on]
+      when 'fail'
+        base_exit_code == 1 ? 1 : (base_exit_code == 2 ? 2 : 0)
+      when 'error'
+        base_exit_code == 2 ? 2 : 0
+      when 'never'
+        0
+      else
+        base_exit_code
+      end
+    end
+
+    def handle_github_actions(results, summary, run_metadata, base_exit_code)
+      return unless Reporters::GitHubActionsReporter.github_actions?
+
+      ga_reporter = Reporters::GitHubActionsReporter.new(results, summary, run_metadata: run_metadata)
+      ga_reporter.write_step_summary
+      ga_reporter.emit_workflow_commands
+      ga_reporter.write_github_output(base_exit_code)
+    end
+
+    def run_validate
+      spec_path = @argv.shift
+      unless spec_path
+        $stderr.puts "Error: spec file or directory required"
+        return 1
+      end
+
+      unless File.exist?(spec_path)
+        $stderr.puts "Error: #{spec_path} not found"
+        return 1
+      end
+
+      validator = Validator.new
+      valid = validator.validate(spec_path)
+
+      if valid
+        puts "=== Validation Results ==="
+        puts "All specs valid: #{validator.loaded_specs.size} spec(s) validated"
+        validator.warnings.each do |warning|
+          puts "[WARNING] #{warning.message}"
+        end
+        0
+      else
+        puts "=== Validation Results ==="
+        puts "Validation FAILED with #{validator.errors.size} error(s)"
+        puts ""
+        validator.error_messages.each do |msg|
+          puts "[ERROR] #{msg}"
+        end
+        2
+      end
     end
 
     def write_reports(results, summary, run_metadata)
@@ -194,15 +270,20 @@ module Anyspec
         Usage: anyspec <command> [options]
 
         Commands:
-          check <spec.yml|dir>  Run checks against OCI resources
-          version               Show version
-          help                  Show this help
+          check <spec.yml|dir>     Run checks against OCI resources
+          validate <spec.yml|dir>  Validate spec files offline (no OCI access required)
+          version                  Show version
+          help                     Show this help
 
         Options:
           --out-dir DIR       Output directory for results (default: artifacts)
           --profile NAME      OCI config profile name (default: DEFAULT)
           --config PATH       Path to OCI config file (default: ~/.oci/config)
           --auth-mode MODE    OCI auth: config_file (default), instance_principal, resource_principal
+          --fail-on MODE      When to exit non-zero (default: both fail and error exit non-zero)
+                              fail:  Exit 1 on drift, exit 2 on errors only
+                              error: Exit 2 on errors only (drift exits 0)
+                              never: Always exit 0 (still writes reports and outputs)
           -h, --help          Show this help
           -v, --version       Show version
 
@@ -210,16 +291,25 @@ module Anyspec
           OCI_AUTH_MODE       Override auth mode (config_file, instance_principal, resource_principal)
           OCI_REGION          Region for instance/resource principal auth
 
+        GitHub Actions Integration:
+          When GITHUB_ACTIONS=true is detected:
+          - Writes Markdown report to $GITHUB_STEP_SUMMARY
+          - Emits ::error and ::notice workflow commands with file annotations
+          - Writes pass/fail/error/exit_code to $GITHUB_OUTPUT
+
         Exit Codes:
-          0  All checks passed
+          0  All checks passed (check) / All specs valid (validate)
           1  At least one check failed (drift detected)
-          2  Error occurred (fetch/auth error), no drift detected
+          2  Error occurred (fetch/auth error, validation error, or config problem)
 
         Examples:
           anyspec check examples/oci-guardrails.yml
           anyspec check examples/ --out-dir ./reports
           anyspec check spec.yml --profile PRODUCTION
           anyspec check spec.yml --auth-mode instance_principal
+          anyspec check spec.yml --fail-on never
+          anyspec validate examples/
+          anyspec validate spec.yml
       HELP
     end
   end
