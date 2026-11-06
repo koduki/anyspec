@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'oci'
-
 module Anyspec
   module Adapters
     class ObjectStorageBucket < Base
@@ -14,26 +12,27 @@ module Anyspec
         raise Anyspec::Error, "namespace is required for #{ADAPTER_TYPE}" unless namespace
         raise Anyspec::Error, "bucket_name or name is required for #{ADAPTER_TYPE}" unless bucket_name
 
-        client = create_client(OCI::ObjectStorage::ObjectStorageClient)
-        response = client.get_bucket(namespace, bucket_name)
+        args = ['os', 'bucket', 'get', '--namespace-name', namespace, '--bucket-name', bucket_name]
+        data = run_oci_cli(args)
+        normalized = normalize_oci_response(data)
 
-        extract_bucket(response.data)
+        extract_bucket(normalized)
       end
 
       private
 
-      def extract_bucket(bucket)
+      def extract_bucket(bucket_data)
         {
-          'name' => bucket.name,
-          'namespace' => bucket.namespace,
-          'compartment_id' => bucket.compartment_id,
-          'public_access_type' => bucket.public_access_type,
-          'storage_tier' => bucket.storage_tier,
-          'versioning' => bucket.versioning,
-          'is_read_only' => bucket.is_read_only,
-          'auto_tiering' => bucket.auto_tiering,
-          'object_events_enabled' => bucket.object_events_enabled,
-          'replication_enabled' => bucket.replication_enabled
+          'name' => bucket_data['name'],
+          'namespace' => bucket_data['namespace'],
+          'compartment_id' => bucket_data['compartment_id'],
+          'public_access_type' => bucket_data['public_access_type'],
+          'storage_tier' => bucket_data['storage_tier'],
+          'versioning' => bucket_data['versioning'],
+          'is_read_only' => bucket_data['is_read_only'],
+          'auto_tiering' => bucket_data['auto_tiering'],
+          'object_events_enabled' => bucket_data['object_events_enabled'],
+          'replication_enabled' => bucket_data['replication_enabled']
         }
       end
     end

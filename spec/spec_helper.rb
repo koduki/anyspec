@@ -3,6 +3,8 @@
 require 'bundler/setup'
 require 'anyspec'
 
+FAKE_OCI_CLI = File.expand_path('support/fake_oci_cli', __dir__)
+
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true

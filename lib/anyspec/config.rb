@@ -1,33 +1,18 @@
 # frozen_string_literal: true
 
-require 'oci'
-require 'securerandom'
-
 module Anyspec
   class Config
     AUTH_MODES = %w[config_file instance_principal resource_principal].freeze
+    DEFAULT_OCI_CLI = 'oci'
 
-    attr_reader :profile, :oci_config, :auth_mode
+    attr_reader :profile, :auth_mode, :config_path, :region, :oci_cli_path
 
-    def initialize(profile: 'DEFAULT', config_path: nil, auth_mode: nil)
+    def initialize(profile: 'DEFAULT', config_path: nil, auth_mode: nil, region: nil, oci_cli: nil)
       @profile = profile
-      @config_path = config_path || File.join(Dir.home, '.oci', 'config')
       @auth_mode = determine_auth_mode(auth_mode)
-      @oci_config = load_oci_config
-    end
-
-    def oci_client_config
-      @oci_config
-    end
-
-    def region
-      return @oci_config.region if @oci_config.respond_to?(:region)
-
-      nil
-    end
-
-    def signer
-      @signer
+      @config_path = determine_config_path(config_path)
+      @region = region || ENV['OCI_REGION']
+      @oci_cli_path = determine_oci_cli_path(oci_cli)
     end
 
     private
@@ -41,42 +26,20 @@ module Anyspec
       'config_file'
     end
 
-    def load_oci_config
-      case @auth_mode
-      when 'instance_principal'
-        load_instance_principal_config
-      when 'resource_principal'
-        load_resource_principal_config
-      else
-        load_config_file
+    def determine_config_path(explicit_path)
+      return explicit_path if explicit_path && !explicit_path.empty?
+
+      if ENV['OCI_CLI_CONFIG_FILE']
+        return ENV['OCI_CLI_CONFIG_FILE']
       end
-    rescue StandardError => e
-      raise Anyspec::Error, "Failed to load OCI config (#{@auth_mode}): #{e.message}"
+
+      nil
     end
 
-    def load_config_file
-      OCI::ConfigFileLoader.load_config(
-        config_file_location: @config_path,
-        profile_name: @profile
-      )
-    end
+    def determine_oci_cli_path(explicit_path)
+      return explicit_path if explicit_path && !explicit_path.empty?
 
-    def load_instance_principal_config
-      @signer = OCI::Auth::Signers::InstancePrincipalsSecurityTokenSigner.new
-      region = @signer.region || ENV['OCI_REGION']
-
-      config = OCI::Config.new
-      config.region = region
-      config
-    end
-
-    def load_resource_principal_config
-      @signer = OCI::Auth::Signers::get_resource_principals_signer
-      region = ENV['OCI_RESOURCE_PRINCIPAL_REGION'] || ENV['OCI_REGION']
-
-      config = OCI::Config.new
-      config.region = region
-      config
+      ENV.fetch('OCI_CLI', DEFAULT_OCI_CLI)
     end
   end
 end

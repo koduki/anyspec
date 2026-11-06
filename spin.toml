@@ -1,0 +1,11 @@
+# Spinel project configuration for anyspec
+# Build with: spin build
+# Run with: spin run -- check examples/oci-guardrails.yml
+
+[package]
+name = "anyspec"
+version = "0.1.0"
+
+[[bin]]
+name = "anyspec"
+path = "bin/anyspec.rb"

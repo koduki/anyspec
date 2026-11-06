@@ -3,54 +3,49 @@
 require 'spec_helper'
 
 RSpec.describe Anyspec::Adapters::CloudGuardConfiguration do
-  let(:oci_config) { instance_double('OCI::Config') }
-  let(:config) { instance_double(Anyspec::Config, oci_client_config: oci_config, signer: nil) }
+  let(:config) { Anyspec::Config.new(oci_cli: FAKE_OCI_CLI) }
   let(:adapter) { described_class.new(config) }
 
   describe '#fetch' do
-    let(:mock_client) { instance_double(OCI::CloudGuard::CloudGuardClient) }
-    let(:mock_response) { instance_double(OCI::Response) }
-    let(:mock_configuration) do
-      instance_double(
-        'OCI::CloudGuard::Models::Configuration',
-        status: 'ENABLED',
-        reporting_region: 'us-ashburn-1',
-        self_manage_resources: false
-      )
+    context 'with valid compartment_id' do
+      let(:spec) do
+        {
+          'compartment_id' => 'ocid1.tenancy.oc1..test'
+        }
+      end
+
+      it 'returns configuration data' do
+        result = adapter.fetch(spec)
+
+        expect(result['status']).to eq('ENABLED')
+        expect(result['reporting_region']).to eq('ap-tokyo-1')
+        expect(result['self_manage_resources']).to eq(false)
+      end
     end
 
-    before do
-      allow(OCI::CloudGuard::CloudGuardClient).to receive(:new).and_return(mock_client)
-      allow(mock_client).to receive(:get_configuration).and_return(mock_response)
-      allow(mock_response).to receive(:data).and_return(mock_configuration)
+    context 'without compartment_id' do
+      let(:spec) { {} }
+
+      it 'raises error' do
+        expect { adapter.fetch(spec) }.to raise_error(Anyspec::Error, /compartment_id is required/)
+      end
     end
+  end
 
-    it 'fetches configuration from OCI' do
-      spec = {
-        'compartment_id' => 'ocid1.tenancy.oc1..test'
-      }
+  describe 'OCI CLI command construction' do
+    it 'builds correct command array' do
+      config = Anyspec::Config.new(oci_cli: FAKE_OCI_CLI)
+      adapter = described_class.new(config)
 
-      result = adapter.fetch(spec)
+      args = ['cloud-guard', 'configuration', 'get', '--compartment-id', 'ocid1.test']
+      cmd_array = adapter.send(:build_oci_command_array, args)
 
-      expect(result['status']).to eq('ENABLED')
-      expect(result['reporting_region']).to eq('us-ashburn-1')
-      expect(result['self_manage_resources']).to eq(false)
-    end
-
-    it 'raises error when compartment_id is missing' do
-      spec = {}
-
-      expect do
-        adapter.fetch(spec)
-      end.to raise_error(Anyspec::Error, /compartment_id is required/)
-    end
-
-    it 'calls OCI API with correct compartment_id' do
-      spec = { 'compartment_id' => 'ocid1.tenancy.oc1..test' }
-
-      adapter.fetch(spec)
-
-      expect(mock_client).to have_received(:get_configuration).with('ocid1.tenancy.oc1..test')
+      expect(cmd_array).to include('cloud-guard')
+      expect(cmd_array).to include('configuration')
+      expect(cmd_array).to include('get')
+      expect(cmd_array).to include('--compartment-id')
+      expect(cmd_array).to include('--output')
+      expect(cmd_array).to include('json')
     end
   end
 end

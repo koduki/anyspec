@@ -15,7 +15,8 @@ module Anyspec
         profile: 'DEFAULT',
         config_path: nil,
         auth_mode: nil,
-        fail_on: nil
+        fail_on: nil,
+        oci_cli: nil
       }
     end
 
@@ -80,6 +81,10 @@ module Anyspec
           @options[:fail_on] = mode
         end
 
+        opts.on('--oci-cli PATH', 'Path to OCI CLI executable (default: oci, or OCI_CLI env var)') do |path|
+          @options[:oci_cli] = path
+        end
+
         opts.on('-h', '--help', 'Show this help') do
           puts opts
           exit 0
@@ -114,7 +119,8 @@ module Anyspec
       config = Config.new(
         profile: @options[:profile],
         config_path: @options[:config_path],
-        auth_mode: @options[:auth_mode]
+        auth_mode: @options[:auth_mode],
+        oci_cli: @options[:oci_cli]
       )
 
       loader = SpecLoader.new
@@ -284,6 +290,7 @@ module Anyspec
           --profile NAME      OCI config profile name (default: DEFAULT)
           --config PATH       Path to OCI config file (default: ~/.oci/config)
           --auth-mode MODE    OCI auth: config_file (default), instance_principal, resource_principal
+          --oci-cli PATH      Path to OCI CLI executable (default: oci, or OCI_CLI env var)
           --fail-on MODE      When to exit non-zero (default: both fail and error exit non-zero)
                               fail:  Exit 1 on drift, exit 2 on errors only
                               error: Exit 2 on errors only (drift exits 0)
@@ -292,6 +299,8 @@ module Anyspec
           -v, --version       Show version
 
         Environment Variables:
+          OCI_CLI             Path to OCI CLI executable
+          OCI_CLI_CONFIG_FILE Path to OCI config file
           OCI_AUTH_MODE       Override auth mode (config_file, instance_principal, resource_principal)
           OCI_REGION          Region for instance/resource principal auth
 

@@ -154,6 +154,12 @@ RSpec.describe Anyspec::CLI do
       cli.run
       expect(cli.instance_variable_get(:@options)[:fail_on]).to eq('error')
     end
+
+    it 'parses --oci-cli option' do
+      cli = described_class.new(['--oci-cli', '/usr/local/bin/oci', 'help'])
+      cli.run
+      expect(cli.instance_variable_get(:@options)[:oci_cli]).to eq('/usr/local/bin/oci')
+    end
   end
 
   describe '#calculate_exit_code' do

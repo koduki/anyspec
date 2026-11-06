@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'oci'
-
 module Anyspec
   module Adapters
     class IdentityAuthenticationPolicy < Base
@@ -11,25 +9,26 @@ module Anyspec
         compartment_id = spec['compartment_id']
         raise Anyspec::Error, "compartment_id is required for #{ADAPTER_TYPE}" unless compartment_id
 
-        client = create_client(OCI::Identity::IdentityClient)
-        response = client.get_authentication_policy(compartment_id)
+        args = ['iam', 'authentication-policy', 'get', '--compartment-id', compartment_id]
+        data = run_oci_cli(args)
+        normalized = normalize_oci_response(data)
 
-        extract_policy(response.data)
+        extract_policy(normalized)
       end
 
       private
 
-      def extract_policy(policy)
+      def extract_policy(policy_data)
         result = {
-          'compartment_id' => policy.compartment_id
+          'compartment_id' => policy_data['compartment_id']
         }
 
-        if policy.password_policy
-          result['password_policy'] = extract_password_policy(policy.password_policy)
+        if policy_data['password_policy']
+          result['password_policy'] = extract_password_policy(policy_data['password_policy'])
         end
 
-        if policy.network_policy
-          result['network_policy'] = extract_network_policy(policy.network_policy)
+        if policy_data['network_policy']
+          result['network_policy'] = extract_network_policy(policy_data['network_policy'])
         end
 
         result
@@ -37,18 +36,18 @@ module Anyspec
 
       def extract_password_policy(pp)
         {
-          'minimum_password_length' => pp.minimum_password_length,
-          'is_uppercase_characters_required' => pp.is_uppercase_characters_required,
-          'is_lowercase_characters_required' => pp.is_lowercase_characters_required,
-          'is_numeric_characters_required' => pp.is_numeric_characters_required,
-          'is_special_characters_required' => pp.is_special_characters_required,
-          'is_username_containment_allowed' => pp.is_username_containment_allowed
+          'minimum_password_length' => pp['minimum_password_length'],
+          'is_uppercase_characters_required' => pp['is_uppercase_characters_required'],
+          'is_lowercase_characters_required' => pp['is_lowercase_characters_required'],
+          'is_numeric_characters_required' => pp['is_numeric_characters_required'],
+          'is_special_characters_required' => pp['is_special_characters_required'],
+          'is_username_containment_allowed' => pp['is_username_containment_allowed']
         }
       end
 
       def extract_network_policy(np)
         {
-          'network_source_ids' => np.network_source_ids
+          'network_source_ids' => np['network_source_ids']
         }
       end
     end
