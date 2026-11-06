@@ -11,7 +11,7 @@ module Anyspec
         compartment_id = spec['compartment_id']
         raise Anyspec::Error, "compartment_id is required for #{ADAPTER_TYPE}" unless compartment_id
 
-        client = OCI::Identity::IdentityClient.new(config: config.oci_client_config)
+        client = create_client(OCI::Identity::IdentityClient)
         response = client.get_authentication_policy(compartment_id)
 
         extract_policy(response.data)

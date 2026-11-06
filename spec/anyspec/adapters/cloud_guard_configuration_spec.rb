@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Anyspec::Adapters::CloudGuardConfiguration do
   let(:oci_config) { instance_double('OCI::Config') }
-  let(:config) { instance_double(Anyspec::Config, oci_client_config: oci_config) }
+  let(:config) { instance_double(Anyspec::Config, oci_client_config: oci_config, signer: nil) }
   let(:adapter) { described_class.new(config) }
 
   describe '#fetch' do

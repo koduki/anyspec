@@ -11,7 +11,7 @@ module Anyspec
         compartment_id = spec['compartment_id']
         raise Anyspec::Error, "compartment_id is required for #{ADAPTER_TYPE}" unless compartment_id
 
-        client = OCI::CloudGuard::CloudGuardClient.new(config: config.oci_client_config)
+        client = create_client(OCI::CloudGuard::CloudGuardClient)
 
         if spec['target_id']
           response = client.get_target(spec['target_id'])

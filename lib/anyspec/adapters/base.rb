@@ -15,6 +15,14 @@ module Anyspec
 
       protected
 
+      def create_client(client_class)
+        if config.signer
+          client_class.new(config: config.oci_client_config, signer: config.signer)
+        else
+          client_class.new(config: config.oci_client_config)
+        end
+      end
+
       def symbolize_keys(hash)
         return hash unless hash.is_a?(Hash)
 

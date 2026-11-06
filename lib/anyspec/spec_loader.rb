@@ -6,8 +6,11 @@ module Anyspec
   class SpecLoader
     ENV_VAR_PATTERN = /\$\{([^}]+)\}/.freeze
 
+    attr_reader :loaded_paths
+
     def initialize
       @specs = []
+      @loaded_paths = []
     end
 
     def load(path)
@@ -21,6 +24,7 @@ module Anyspec
     end
 
     def load_file(path)
+      @loaded_paths << File.expand_path(path)
       content = File.read(path)
       data = YAML.safe_load(content, permitted_classes: [Symbol])
       items = data.is_a?(Array) ? data : [data]

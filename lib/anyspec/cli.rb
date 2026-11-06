@@ -12,7 +12,8 @@ module Anyspec
       @options = {
         out_dir: DEFAULT_OUT_DIR,
         profile: 'DEFAULT',
-        config_path: nil
+        config_path: nil,
+        auth_mode: nil
       }
     end
 
@@ -61,6 +62,10 @@ module Anyspec
           @options[:config_path] = path
         end
 
+        opts.on('--auth-mode MODE', 'OCI auth mode: config_file, instance_principal, resource_principal') do |mode|
+          @options[:auth_mode] = mode
+        end
+
         opts.on('-h', '--help', 'Show this help') do
           puts opts
           exit 0
@@ -87,9 +92,12 @@ module Anyspec
         return 1
       end
 
+      run_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
       config = Config.new(
         profile: @options[:profile],
-        config_path: @options[:config_path]
+        config_path: @options[:config_path],
+        auth_mode: @options[:auth_mode]
       )
 
       loader = SpecLoader.new
@@ -99,33 +107,70 @@ module Anyspec
       results = runner.run(specs)
       summary = runner.summary
 
-      write_reports(results, summary)
-      print_summary(summary)
+      duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - run_start) * 1000).round
 
-      runner.success? ? 0 : 1
+      run_metadata = {
+        spec_paths: loader.loaded_paths,
+        profile: config.profile,
+        region: config.region,
+        auth_mode: config.auth_mode,
+        duration_ms: duration_ms
+      }
+
+      write_reports(results, summary, run_metadata)
+      print_progress(results)
+      print_summary(summary, runner.exit_code)
+
+      runner.exit_code
     rescue Anyspec::Error => e
       $stderr.puts "Error: #{e.message}"
-      1
+      2
     rescue StandardError => e
       $stderr.puts "Unexpected error: #{e.message}"
       $stderr.puts e.backtrace.first(5).join("\n") if ENV['DEBUG']
-      1
+      2
     end
 
-    def write_reports(results, summary)
+    def write_reports(results, summary, run_metadata)
       out_dir = @options[:out_dir]
       FileUtils.mkdir_p(out_dir)
 
-      json_reporter = Reporters::JsonReporter.new(results, summary)
+      json_reporter = Reporters::JsonReporter.new(results, summary, run_metadata: run_metadata)
       json_reporter.write(File.join(out_dir, 'result.json'))
 
-      md_reporter = Reporters::MarkdownReporter.new(results, summary)
+      md_reporter = Reporters::MarkdownReporter.new(results, summary, run_metadata: run_metadata)
       md_reporter.write(File.join(out_dir, 'result.md'))
 
       puts "Results written to #{out_dir}/"
     end
 
-    def print_summary(summary)
+    def print_progress(results)
+      puts ""
+      puts "=== Check Results ==="
+      results.each do |result|
+        status_indicator = case result.status
+                           when :pass then '[PASS]'
+                           when :fail then '[FAIL]'
+                           when :error then '[ERROR]'
+                           end
+
+        duration_str = result.duration_ms ? "(#{result.duration_ms}ms)" : ''
+
+        hint = ''
+        if result.fail? && result.mismatches&.any?
+          first_mismatch = result.mismatches.first
+          hint = " - #{first_mismatch[:path]}: expected '#{first_mismatch[:expected]}', got '#{first_mismatch[:actual]}'"
+          hint = hint[0, 80] + '...' if hint.length > 83
+        elsif result.error?
+          hint = " - #{result.message}"
+          hint = hint[0, 80] + '...' if hint.length > 83
+        end
+
+        puts "#{status_indicator} #{result.id} #{duration_str}#{hint}"
+      end
+    end
+
+    def print_summary(summary, exit_code)
       puts ""
       puts "=== Anyspec Check Summary ==="
       puts "Total:  #{summary[:total]}"
@@ -134,10 +179,13 @@ module Anyspec
       puts "Error:  #{summary[:error]}"
       puts ""
 
-      if summary[:fail].positive? || summary[:error].positive?
-        puts "Result: FAILED"
-      else
+      case exit_code
+      when 0
         puts "Result: PASSED"
+      when 1
+        puts "Result: FAILED (drift detected)"
+      when 2
+        puts "Result: ERROR (fetch/config error, no drift)"
       end
     end
 
@@ -151,16 +199,27 @@ module Anyspec
           help                  Show this help
 
         Options:
-          --out-dir DIR     Output directory for results (default: artifacts)
-          --profile NAME    OCI config profile name (default: DEFAULT)
-          --config PATH     Path to OCI config file (default: ~/.oci/config)
-          -h, --help        Show this help
-          -v, --version     Show version
+          --out-dir DIR       Output directory for results (default: artifacts)
+          --profile NAME      OCI config profile name (default: DEFAULT)
+          --config PATH       Path to OCI config file (default: ~/.oci/config)
+          --auth-mode MODE    OCI auth: config_file (default), instance_principal, resource_principal
+          -h, --help          Show this help
+          -v, --version       Show version
+
+        Environment Variables:
+          OCI_AUTH_MODE       Override auth mode (config_file, instance_principal, resource_principal)
+          OCI_REGION          Region for instance/resource principal auth
+
+        Exit Codes:
+          0  All checks passed
+          1  At least one check failed (drift detected)
+          2  Error occurred (fetch/auth error), no drift detected
 
         Examples:
           anyspec check examples/oci-guardrails.yml
           anyspec check examples/ --out-dir ./reports
           anyspec check spec.yml --profile PRODUCTION
+          anyspec check spec.yml --auth-mode instance_principal
       HELP
     end
   end
