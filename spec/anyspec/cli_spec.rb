@@ -138,7 +138,9 @@ RSpec.describe Anyspec::CLI do
     it 'rejects invalid --fail-on value' do
       cli = described_class.new(['--fail-on', 'invalid', 'help'])
 
-      expect { cli.run }.to output(/Invalid --fail-on value/).to_stderr
+      result = nil
+      expect { result = cli.run }.to output(/Invalid --fail-on value/).to_stderr
+      expect(result).to eq(1)
     end
 
     it 'accepts fail as --fail-on value' do

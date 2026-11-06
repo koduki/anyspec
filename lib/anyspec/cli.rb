@@ -21,6 +21,8 @@ module Anyspec
 
     def run
       parse_options!
+      return 1 if @options[:parse_error]
+
       command = @argv.shift
 
       case command
@@ -73,8 +75,7 @@ module Anyspec
 
         opts.on('--fail-on MODE', 'When to exit non-zero: fail (drift), error (fetch issues), never') do |mode|
           unless FAIL_ON_OPTIONS.include?(mode)
-            $stderr.puts "Error: Invalid --fail-on value '#{mode}'. Must be one of: #{FAIL_ON_OPTIONS.join(', ')}"
-            exit 1
+            raise OptionParser::InvalidArgument, "Invalid --fail-on value '#{mode}'. Must be one of: #{FAIL_ON_OPTIONS.join(', ')}"
           end
           @options[:fail_on] = mode
         end
@@ -91,6 +92,9 @@ module Anyspec
       end
 
       parser.order!(@argv)
+    rescue OptionParser::InvalidArgument => e
+      $stderr.puts "Error: #{e.message}"
+      @options[:parse_error] = true
     end
 
     def run_check
