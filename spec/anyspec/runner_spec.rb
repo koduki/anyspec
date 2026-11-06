@@ -3,7 +3,14 @@
 require 'spec_helper'
 
 RSpec.describe Anyspec::Runner do
-  let(:config) { instance_double(Anyspec::Config, oci_client_config: {}) }
+  let(:config) do
+    instance_double(Anyspec::Config,
+                    oci_cli_path: 'oci',
+                    profile: 'DEFAULT',
+                    config_path: nil,
+                    auth_mode: nil,
+                    region: nil)
+  end
   let(:runner) { described_class.new(config: config) }
 
   describe '#run' do

@@ -1,0 +1,113 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Fake OCI CLI for testing anyspec
+# Outputs JSON in the real OCI CLI format (kebab-case keys)
+
+require 'json'
+
+RESPONSES = {
+  'cloud-guard configuration get' => {
+    'data' => {
+      'status' => 'ENABLED',
+      'reporting-region' => 'ap-tokyo-1',
+      'self-manage-resources' => false
+    }
+  },
+  'cloud-guard target get' => {
+    'data' => {
+      'id' => 'ocid1.cloudguardtarget.oc1..test',
+      'display-name' => 'root-target',
+      'compartment-id' => 'ocid1.tenancy.oc1..test',
+      'target-resource-type' => 'COMPARTMENT',
+      'target-resource-id' => 'ocid1.tenancy.oc1..test',
+      'lifecycle-state' => 'ACTIVE'
+    }
+  },
+  'cloud-guard target list' => {
+    'data' => [
+      {
+        'id' => 'ocid1.cloudguardtarget.oc1..test',
+        'display-name' => 'root-target',
+        'compartment-id' => 'ocid1.tenancy.oc1..test',
+        'target-resource-type' => 'COMPARTMENT',
+        'target-resource-id' => 'ocid1.tenancy.oc1..test',
+        'lifecycle-state' => 'ACTIVE'
+      }
+    ]
+  },
+  'iam authentication-policy get' => {
+    'data' => {
+      'compartment-id' => 'ocid1.tenancy.oc1..test',
+      'password-policy' => {
+        'minimum-password-length' => 14,
+        'is-uppercase-characters-required' => true,
+        'is-lowercase-characters-required' => true,
+        'is-numeric-characters-required' => true,
+        'is-special-characters-required' => true,
+        'is-username-containment-allowed' => false
+      },
+      'network-policy' => {
+        'network-source-ids' => []
+      }
+    }
+  },
+  'audit config get' => {
+    'data' => {
+      'retention-period-days' => 365
+    }
+  },
+  'os bucket get' => {
+    'data' => {
+      'name' => 'test-bucket',
+      'namespace' => 'test-namespace',
+      'compartment-id' => 'ocid1.compartment.oc1..test',
+      'public-access-type' => 'NoPublicAccess',
+      'storage-tier' => 'Standard',
+      'versioning' => 'Enabled',
+      'is-read-only' => false,
+      'auto-tiering' => 'Disabled',
+      'object-events-enabled' => false,
+      'replication-enabled' => false
+    }
+  }
+}
+
+def find_response(args)
+  cmd_key = args.take_while { |a| !a.start_with?('--') }.join(' ')
+
+  RESPONSES.each do |key, response|
+    if cmd_key.include?(key) || key.split(' ').all? { |part| cmd_key.include?(part) }
+      return response
+    end
+  end
+
+  nil
+end
+
+def main
+  args = ARGV.dup
+
+  args.reject! { |a| a == '--output' || a == 'json' }
+  args.reject! { |a| a.start_with?('--profile') }
+  args.reject! { |a| a.start_with?('--config-file') }
+  args.reject! { |a| a.start_with?('--auth') }
+  args.reject! { |a| a.start_with?('--region') }
+
+  if args.include?('--error')
+    $stderr.puts "ServiceError: Test error"
+    exit 1
+  end
+
+  response = find_response(args)
+
+  if response
+    puts JSON.generate(response)
+    exit 0
+  else
+    $stderr.puts "Unknown command: #{ARGV.join(' ')}"
+    exit 1
+  end
+end
+
+main

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'oci'
-
 module Anyspec
   module Adapters
     class CloudGuardTarget < Base
@@ -11,16 +9,10 @@ module Anyspec
         compartment_id = spec['compartment_id']
         raise Anyspec::Error, "compartment_id is required for #{ADAPTER_TYPE}" unless compartment_id
 
-        client = create_client(OCI::CloudGuard::CloudGuardClient)
-
         if spec['target_id']
-          response = client.get_target(spec['target_id'])
-          extract_target(response.data)
+          fetch_by_id(spec['target_id'])
         elsif spec['name']
-          target = find_target_by_name(client, compartment_id, spec['name'])
-          raise Anyspec::Error, "Target not found with name: #{spec['name']}" unless target
-
-          extract_target(target)
+          fetch_by_name(compartment_id, spec['name'])
         else
           raise Anyspec::Error, "Either target_id or name is required for #{ADAPTER_TYPE}"
         end
@@ -28,19 +20,45 @@ module Anyspec
 
       private
 
-      def find_target_by_name(client, compartment_id, name)
-        response = client.list_targets(compartment_id, display_name: name)
-        response.data.find { |t| t.display_name == name }
+      def fetch_by_id(target_id)
+        args = ['cloud-guard', 'target', 'get', '--target-id', target_id]
+        data = run_oci_cli(args)
+        normalized = normalize_oci_response(data)
+        extract_target(normalized)
       end
 
-      def extract_target(target)
+      def fetch_by_name(compartment_id, name)
+        args = ['cloud-guard', 'target', 'list', '--compartment-id', compartment_id, '--display-name', name]
+        data = run_oci_cli(args)
+
+        items = extract_items_from_list(data)
+
+        target = items.find { |t| find_display_name(t) == name }
+        raise Anyspec::Error, "Target not found with name: #{name}" unless target
+
+        normalized = normalize_oci_response(target)
+        extract_target(normalized)
+      end
+
+      def extract_items_from_list(data)
+        return data if data.is_a?(Array)
+        return data['items'] if data.is_a?(Hash) && data['items']
+
+        [data]
+      end
+
+      def find_display_name(item)
+        item['display-name'] || item['displayName'] || item['display_name']
+      end
+
+      def extract_target(target_data)
         {
-          'id' => target.id,
-          'display_name' => target.display_name,
-          'compartment_id' => target.compartment_id,
-          'target_resource_type' => target.target_resource_type,
-          'target_resource_id' => target.target_resource_id,
-          'lifecycle_state' => target.lifecycle_state
+          'id' => target_data['id'],
+          'display_name' => target_data['display_name'],
+          'compartment_id' => target_data['compartment_id'],
+          'target_resource_type' => target_data['target_resource_type'],
+          'target_resource_id' => target_data['target_resource_id'],
+          'lifecycle_state' => target_data['lifecycle_state']
         }
       end
     end

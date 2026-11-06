@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'oci'
-
 module Anyspec
   module Adapters
     class CloudGuardConfiguration < Base
@@ -11,19 +9,20 @@ module Anyspec
         compartment_id = spec['compartment_id']
         raise Anyspec::Error, "compartment_id is required for #{ADAPTER_TYPE}" unless compartment_id
 
-        client = create_client(OCI::CloudGuard::CloudGuardClient)
-        response = client.get_configuration(compartment_id)
+        args = ['cloud-guard', 'configuration', 'get', '--compartment-id', compartment_id]
+        data = run_oci_cli(args)
+        normalized = normalize_oci_response(data)
 
-        extract_configuration(response.data)
+        extract_configuration(normalized)
       end
 
       private
 
-      def extract_configuration(config_obj)
+      def extract_configuration(config_data)
         {
-          'status' => config_obj.status,
-          'reporting_region' => config_obj.reporting_region,
-          'self_manage_resources' => config_obj.self_manage_resources
+          'status' => config_data['status'],
+          'reporting_region' => config_data['reporting_region'],
+          'self_manage_resources' => config_data['self_manage_resources']
         }
       end
     end
