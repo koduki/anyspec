@@ -8,6 +8,8 @@ module Anyspec
       class OciBuiltins
         ADMIN_ROLE_APP_ID = 'IDCSAppId'
         IPRANGE_PATTERN = /#inIPRange\("([^"]+)"\)/
+        MAX_NESTED_GROUPS = 10_000
+        MAX_NESTED_MEMBERS = 100_000
 
         def initialize(executor:, pagination:)
           @executor = executor
@@ -192,6 +194,50 @@ module Anyspec
               endpoint: endpoint,
               location: loc
             )
+          end
+
+          builtins.register('oci_group_closure') do |args, interp, loc|
+            endpoint, group_ids = args
+            raise RuntimeError.new('oci_group_closure requires an array of group ids', loc) unless group_ids.is_a?(Array)
+
+            pending = group_ids.compact.uniq
+            queued = pending.to_set
+            groups = []
+            users = Set.new
+            total_members = 0
+            index = 0
+
+            while index < pending.length
+              raise RuntimeError.new("Too many nested groups (>#{MAX_NESTED_GROUPS})", loc) if pending.length > MAX_NESTED_GROUPS
+              group_id = pending[index]
+              index += 1
+              cmd = ['oci', 'identity-domains', 'group', 'get', '--endpoint', endpoint,
+                     '--group-id', group_id, '--attribute-sets', 'default']
+              group = @executor.execute(cmd, location: loc)
+              raise RuntimeError.new("Invalid group response: #{group_id}", loc) unless group.is_a?(Hash)
+
+              members = @pagination.group_members_paginate(group_id: group_id, endpoint: endpoint, location: loc)
+              total_members += members.length
+              raise RuntimeError.new("Too many nested group members (>#{MAX_NESTED_MEMBERS})", loc) if total_members > MAX_NESTED_MEMBERS
+              groups << group.merge('members' => members)
+
+              members.each do |member|
+                member_id = member['value']
+                case member['type'].to_s.downcase
+                when 'user'
+                  member_id ? users.add(member_id) : interp.add_warning("Group #{group_id}: user member has no value", loc)
+                when 'group'
+                  if member_id
+                    pending << member_id if queued.add?(member_id)
+                  else
+                    interp.add_warning("Group #{group_id}: group member has no value", loc)
+                  end
+                else
+                  interp.add_warning("Group #{group_id}: unsupported member type #{member['type'].inspect}", loc)
+                end
+              end
+            end
+            { 'groups' => groups, 'user_ids' => users.to_a }
           end
         end
 

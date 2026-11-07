@@ -244,6 +244,9 @@ if_then $is_admin "admin" "user"
 
 ## OCI 専用ビルトイン
 
+### `oci_group_closure endpoint group_ids`
+指定したグループと入れ子のグループをページ送りして収集し、`groups` と `user_ids` を返します。循環を検出し、未知のメンバー種別は警告します。
+
 ### `oci_list_compartments tenancy_ocid`
 テナンシー配下の全コンパートメントを取得します。
 

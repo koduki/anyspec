@@ -160,17 +160,10 @@ $domain_results = foreach domain in $active_domains {
   $target_group_ids = compact $target_group_ids
   $target_group_ids = unique $target_group_ids
   
-  # Collect target groups with members using foreach result collection
-  $target_groups_with_members = foreach gid in $target_group_ids {
-    $group = oci_domain_get $endpoint 'group' $gid
-    $members = oci_group_members $endpoint $gid
-    $group_with_members = set_at $group 'members' $members
-    $member_user_ids = map $members 'value'
-    { "group": $group_with_members, "member_ids": $member_user_ids }
-  }
-  $target_groups = map $target_groups_with_members 'group'
-  $member_ids_lists = map $target_groups_with_members 'member_ids'
-  $group_member_users = flatten $member_ids_lists
+  # Traverse nested groups and distinguish user IDs from group IDs.
+  $group_closure = oci_group_closure $endpoint $target_group_ids
+  $target_groups = get $group_closure 'groups'
+  $group_member_users = get $group_closure 'user_ids'
   $domain_data = set_at $domain_data 'collections.targetGroups' $target_groups
   
   # Determine target users: admin grants + group members + condition refs
