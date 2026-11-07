@@ -79,12 +79,33 @@ Loaded external adapters from: ./adapters/adapters.yml
 
 ## Scope of External Adapters
 
-External YAML adapters are designed for simple get/list operations with field extraction. For complex scenarios requiring:
+External YAML adapters are designed for simple get/list operations with field extraction.
 
+**What you CAN do:**
+- Single resource get by ID
+- List filtering by name (simple list + filter)
+- Flag mappings to build OCI CLI arguments
+- Field extraction from JSON response
+
+**What REQUIRES a Ruby adapter (rebuild):**
 - Nested matching logic
-- Multi-resource operations
+- Multi-resource operations (e.g., VCN + Subnet)
 - Custom JSON processing
 - Pagination beyond simple lists
 - Non-OCI clouds
 
-A Ruby adapter rebuild is required.
+## Security
+
+YAML definitions are loaded with `YAML.safe_load`:
+- Permitted classes: `Symbol` only (`Date`, `Time` are disallowed)
+- Shell injection patterns (`` `...` ``, `$(...)`) are blocked
+- Each type is processed by a single `GenericCli` class—no dynamic class generation (`Class.new`, `define_method`) per type
+- Empty list results or unmatched filters raise `Anyspec::Error` (no silent fallback to `items.first`)
+
+## Version Information in Reports
+
+Execution reports (JSON/Markdown) include:
+- Loaded adapter definition files
+- Externally defined types
+- Built-in adapter overrides
+- Version info (anyspec version, adapter schema version, oci CLI version)

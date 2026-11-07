@@ -5,6 +5,31 @@
 
 **anyspec** は Oracle Cloud Infrastructure (OCI) の設定値を期待値と比較する軽量なチェッカーツールです。IaC ツールではなく、セキュリティ・ガードレール設定など意図的にIaCから外しているクラウドのパラメータに対して、設定値のコード化及び意図しない変更を受けていないかを検知するために設計されています。このチェックツールで使われる期待値や出力されるレポートは「動く設計書」としての役割を持ちます。
 
+## コンセプト
+
+### anyspec は IaC ではない
+
+anyspec は Terraform や CloudFormation のような Infrastructure as Code (IaC) ツールとは異なります。IaC ツールはインフラを定義・構築・変更するものですが、anyspec は**既存の設定を検証**するツールです。
+
+多くの組織では、セキュリティ設定やガードレールなど、意図的に IaC の管理対象外としている設定があります。これらは:
+- セキュリティチームが直接管理したい
+- 誤って IaC で上書きされることを防ぎたい
+- Terraform state とは別のライフサイクルで管理したい
+
+anyspec はこれらの設定に対して:
+1. **期待値をコード化**: YAML ファイルで「あるべき姿」を定義
+2. **ドリフト検知**: 実際の設定と期待値を比較し、意図しない変更を検出
+3. **設計書として記録**: チェック結果が設計意図の証跡となる
+
+### 動く設計書としての GitHub Actions
+
+anyspec のスペック YAML と出力レポートは「動く設計書」として機能します:
+- **スペック YAML**: 設計意図を人間が読める形式で記述
+- **チェック結果**: 設計通りかどうかを自動検証
+- **GitHub Actions 統合**: PR でレビュー、Job Summary で結果を確認、定期実行で継続監視
+
+これにより、設計書が「ただのドキュメント」ではなく、常に検証・更新される生きたものになります。
+
 ## 特徴
 
 - **YAML ベースの期待値定義**: 人間が読みやすい形式で設定の期待値を管理
@@ -21,13 +46,64 @@
 - **複数の認証方式**: API キー、インスタンスプリンシパル、リソースプリンシパルに対応
 - **クロスプラットフォーム**: Linux、macOS、Windows で動作
 
+## アーキテクチャ
+
+### 配布モデル
+
+anyspec は2つの形態で利用できます:
+
+1. **CRuby (開発・ローカル用)**: 標準の Ruby 環境で `bundle exec` 経由で実行
+2. **Spinel バイナリ (配布用)**: [Spinel](https://github.com/matz/spinel) でコンパイルした単一バイナリ
+
+Spinel バイナリは Windows を含むクロスプラットフォーム配布を想定していますが、開発自体は CRuby を使い続けます。ローカル開発やテストは CRuby で行い、配布用バイナリだけ Spinel でビルドするワークフローです。
+
+### 実行時依存
+
+anyspec バイナリは `oci` CLI を外部依存として呼び出します。`oci` CLI は anyspec に同梱**しません**—これは意図的なトレードオフです:
+- `oci` CLI のバージョンを anyspec と独立して管理できる
+- 組織で既に `oci` CLI がインストール・設定されている環境を想定
+- CI では `oci` CLI のメジャーバージョンを固定することを推奨
+
+### ビルトインアダプター
+
+以下の5つのアダプタータイプがバイナリに組み込まれており、外部ファイルなしで動作します:
+- `cloud_guard_configuration`: Cloud Guard の有効化状態
+- `cloud_guard_target`: Cloud Guard ターゲットの設定
+- `identity_authentication_policy`: パスワードポリシーなど認証設定
+- `audit_configuration`: 監査ログの保持期間
+- `object_storage_bucket`: Object Storage バケットの設定
+
+これら以外のリソースタイプは、外部 YAML 定義で追加するか、Ruby で実装してリビルドします。
+
 ## インストール
+
+### 開発環境 (CRuby)
+
+ローカル開発やテストには CRuby を使用します:
 
 ```bash
 git clone https://github.com/koduki/anyspec.git
 cd anyspec
 bundle install
 ```
+
+実行:
+
+```bash
+bundle exec ruby -Ilib bin/anyspec check examples/oci-guardrails.yml
+```
+
+### 配布バイナリ (Spinel)
+
+配布用の単一バイナリは Spinel でビルドします。詳細は [Mac でのビルド](#mac-でのビルド) を参照してください。
+
+ビルド済みバイナリを使う場合:
+
+```bash
+./anyspec check examples/oci-guardrails.yml
+```
+
+**注意**: 実行環境には `oci` CLI が必要です。anyspec はバックエンドとして `oci` CLI を呼び出します。
 
 ## 使い方
 
@@ -460,6 +536,142 @@ bundle exec rspec spec/anyspec
 
 CI では Ubuntu、macOS、Windows の全プラットフォームでテストを実行しています。
 
+## Spinel バイナリのビルド
+
+開発・テストには CRuby を直接使用できます。配布用の Spinel バイナリをビルドする場合は以下の方法があります。
+
+### Linux バイナリ (Docker)
+
+Docker (Docker Desktop, Colima, OrbStack など) を使って Linux バイナリをビルドできます。Mac や Linux ホストから実行可能です。
+
+```bash
+# ヘルパースクリプトを使用
+./scripts/build-linux-binary.sh
+
+# または直接 Docker を使用
+docker build --target extractor -t anyspec-builder .
+docker run --rm -v $(pwd)/dist:/output anyspec-builder
+```
+
+ビルドされたバイナリは `dist/anyspec` に出力されます。
+
+**プラットフォームの指定:**
+
+```bash
+# x86-64 (Intel/AMD) 向け
+./scripts/build-linux-binary.sh --platform linux/amd64
+
+# ARM64 (AWS Graviton など) 向け
+./scripts/build-linux-binary.sh --platform linux/arm64
+```
+
+**重要**: この方法で生成されるのは **Linux バイナリ**です。macOS/Windows ネイティブバイナリではありません。
+
+### macOS ネイティブバイナリ
+
+macOS ネイティブバイナリが必要な場合は、Spinel を macOS に直接インストールしてビルドします:
+
+```bash
+# Spinel のビルドとインストール (初回のみ)
+git clone https://github.com/matz/spinel.git
+cd spinel
+make deps && make
+sudo make install
+
+# anyspec ディレクトリに戻る
+cd /path/to/anyspec
+
+# ネイティブバイナリをビルド
+spin build
+```
+
+ビルドされたバイナリは `build/bin/anyspec` に出力されます。
+
+**依存関係**: Xcode Command Line Tools (`xcode-select --install`) が必要です。
+
+### Windows ネイティブバイナリ (.exe)
+
+Spinel は Windows ネイティブの `.exe` ビルドをサポートしています。MSYS2 または RubyInstaller Devkit が必要です。
+
+#### 前提条件
+
+以下のいずれかをインストール:
+- **MSYS2** (推奨): https://www.msys2.org/
+- **RubyInstaller with Devkit**: https://rubyinstaller.org/
+
+MSYS2 UCRT64 シェルで必要なパッケージをインストール:
+
+```bash
+pacman -S --needed make diffutils curl tar git mingw-w64-ucrt-x86_64-gcc
+pacman -S --needed mingw-w64-ucrt-x86_64-ruby  # MSYS2 のみ (Devkit は不要)
+```
+
+#### Spinel のビルド (初回のみ)
+
+MSYS2 UCRT64 シェルで:
+
+```bash
+git clone https://github.com/matz/spinel.git
+cd spinel
+make deps && make
+
+# PATH に追加
+export PATH="$PWD/bin:$PATH"
+```
+
+#### anyspec のビルド
+
+MSYS2 UCRT64 シェルで:
+
+```bash
+# SPINEL_SHELL を設定 (spin コマンドに必要)
+export SPINEL_SHELL=/usr/bin/sh
+
+# anyspec ディレクトリへ移動
+cd /path/to/anyspec
+
+# ビルド
+spin build
+```
+
+または、ヘルパースクリプトを使用:
+
+```bash
+./scripts/build-windows-binary.sh
+```
+
+PowerShell から実行する場合:
+
+```powershell
+.\scripts\build-windows-binary.ps1
+```
+
+ビルドされたバイナリは `build/bin/anyspec.exe` (または `dist/anyspec.exe`) に出力されます。
+
+#### Windows ビルドの注意事項
+
+- **コミュニティメンテナンス**: Spinel の Windows サポートはコミュニティメンテナンスで、master より遅れる可能性があります ([参照](https://github.com/matz/spinel/blob/master/docs/windows.md))
+- **クロスコンパイル不可**: Linux/macOS から Windows バイナリをクロスコンパイルすることはできません。Windows 上でビルドする必要があります
+- **WSL 代替**: WSL (Windows Subsystem for Linux) を使用する場合は、Linux バイナリとしてビルドできます
+
+### サポートするターゲットプラットフォーム
+
+| プラットフォーム | ビルド方法 | 出力 | 備考 |
+|-----------------|-----------|------|------|
+| Linux x86-64 | Docker (linux/amd64) | `anyspec` | 最も一般的、サーバー向け |
+| Linux ARM64 | Docker (linux/arm64) | `anyspec` | AWS Graviton, Raspberry Pi 64-bit |
+| macOS Intel | macOS 上で直接ビルド | `anyspec` | Xcode CLT 必要 |
+| macOS Apple Silicon | macOS 上で直接ビルド | `anyspec` | Xcode CLT 必要 |
+| Windows x64 | Windows (MSYS2) で直接ビルド | `anyspec.exe` | MSYS2 UCRT64 必要 |
+| Windows (WSL) | WSL 内で Docker または直接ビルド | `anyspec` (Linux) | WSL2 推奨 |
+
+### 注意事項
+
+- 生成されるバイナリは `oci` CLI を外部依存として呼び出します
+- `oci` CLI はバイナリに同梱**されません**—実行環境に別途インストールが必要です
+- CI 環境では `oci` CLI のメジャーバージョンを固定することを推奨します
+- Windows では OCI CLI for Windows を使用: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm
+
 ## CI/CD での利用
 
 ### GitHub Actions
@@ -593,6 +805,10 @@ OCI Compute インスタンスや OKE で実行するセルフホストランナ
 
 ## アダプターの追加方法
 
+anyspec は2つの方法でリソースタイプを追加できます:
+1. **外部 YAML 定義**: バイナリ再ビルド不要、単純な get/list 操作向け
+2. **Ruby アダプター**: 複雑なロジック向け、バイナリ再ビルドが必要
+
 ### 方法 1: 外部 YAML 定義 (推奨)
 
 バイナリを再ビルドせずに新しいリソースタイプを追加できます。YAML ファイルで OCI CLI コマンドを定義するだけで、anyspec が自動的に認識します。
@@ -615,9 +831,11 @@ anyspec check specs/
 3. カレントディレクトリの `.anyspec/adapters/` (個人実験用)
 4. ホームディレクトリの `~/.anyspec/adapters/` (個人実験用)
 
+ホームディレクトリやカレントディレクトリのパスは個人的な実験用です。チームで共有する定義は必ず `--adapters-dir` で明示的に指定してください。
+
 #### YAML 定義フォーマット
 
-1ファイルに複数のアダプタータイプを定義できます:
+1ファイルに複数のアダプタータイプを定義できます。多数のファイルに分散させるより、1つのファイルにまとめることを推奨します:
 
 ```yaml
 # adapters/adapters.yml
@@ -672,13 +890,37 @@ Loaded external adapters from: ./adapters/adapters.yml
 
 #### 外部アダプターの対応範囲
 
-外部 YAML アダプターは単純な get/list + フィールド抽出に適しています。以下の場合は Ruby アダプターが必要です:
+外部 YAML アダプターは単純な操作に適しています:
 
+**対応可能:**
+- 単一リソースの get (ID 指定)
+- リストからの名前フィルタリング (simple list + filter)
+- フラグマッピングによる OCI CLI 引数構築
+- フィールド抽出
+
+**Ruby アダプターが必要:**
 - 複雑なネスト照合ロジック
-- 複数リソースの組み合わせ
+- 複数リソースの組み合わせ (例: VCN + サブネット)
 - カスタム JSON 処理
-- ページネーションを超える複雑なリスト処理
+- 単純な list 以上の複雑なページネーション
 - OCI 以外のクラウド
+
+#### セキュリティ
+
+外部 YAML 定義は `YAML.safe_load` で読み込まれます:
+- 許可されるクラス: `Symbol` のみ (`Date`, `Time` は不許可)
+- シェルインジェクションに繋がる可能性のあるパターン (`` `...` ``, `$(...)`) はブロックされます
+- 各タイプは単一の `GenericCli` クラスで処理され、動的なクラス生成は行いません
+
+#### レポート情報
+
+実行レポート (JSON/Markdown) には以下の情報が含まれます:
+- 読み込んだアダプター定義ファイル
+- 外部定義されたタイプ一覧
+- ビルトインアダプターのオーバーライド情報
+- バージョン情報 (anyspec バージョン, アダプタースキーマバージョン, oci CLI バージョン)
+
+詳細なサンプルは [`docs/adapter-examples/`](docs/adapter-examples/) を参照してください。
 
 ### 方法 2: Ruby アダプター (開発者向け、要リビルド)
 
