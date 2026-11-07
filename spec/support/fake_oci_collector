@@ -1,0 +1,9 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path('../../lib', __dir__))
+require 'anyspec'
+require_relative 'dsl_test_helper'
+
+response = DSLTestHelper::CollectorMockExecutor.new.execute(['oci', *ARGV])
+puts JSON.generate(response)
