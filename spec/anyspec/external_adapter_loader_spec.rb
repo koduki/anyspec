@@ -367,7 +367,7 @@ RSpec.describe Anyspec::ExternalAdapterLoader do
           loader = described_class.new
           loader.load_all
 
-          expect(loader.search_paths).to include(project_adapters)
+          expect(loader.search_paths.map { |path| File.realpath(path) }).to include(File.realpath(project_adapters))
         ensure
           Dir.chdir(original_pwd)
         end

@@ -3,7 +3,8 @@
 require 'bundler/setup'
 require 'anyspec'
 
-FAKE_OCI_CLI = File.expand_path('support/fake_oci_cli', __dir__)
+fake_cli_name = Gem.win_platform? ? 'fake_oci_cli.cmd' : 'fake_oci_cli'
+FAKE_OCI_CLI = File.expand_path("support/#{fake_cli_name}", __dir__)
 
 Dir[File.expand_path('support/**/*.rb', __dir__)].each { |f| require f }
 
