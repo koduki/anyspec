@@ -31,7 +31,12 @@ module Anyspec
           
           stdout, stderr, status = run_with_timeout(cmd_array, location)
           
-          validate_output(stdout, stderr, status, location)
+          validation_result = validate_output(stdout, stderr, status, location, cmd_array)
+          
+          if validation_result == :empty_iam_result
+            return []
+          end
+          
           parse_response(stdout, location)
         end
 
@@ -104,15 +109,25 @@ module Anyspec
           [stdout, stderr, status]
         end
 
-        def validate_output(stdout, stderr, status, location)
+        def validate_output(stdout, stderr, status, location, cmd_array)
           unless status.success?
             error_msg = parse_error_message(stdout, stderr)
             raise CLIError.new("OCI CLI failed (exit #{status.exitstatus}): #{error_msg}", location)
           end
 
           if stdout.nil? || stdout.strip.empty?
+            if iam_list_command?(cmd_array)
+              return :empty_iam_result
+            end
             raise CLIError.new('OCI CLI returned empty output', location)
           end
+          
+          :has_output
+        end
+
+        def iam_list_command?(cmd_array)
+          cmd_str = cmd_array.join(' ')
+          cmd_str.include?('iam') && cmd_str.include?('list')
         end
 
         def parse_response(stdout, location)
