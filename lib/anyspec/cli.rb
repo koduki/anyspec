@@ -2,6 +2,7 @@
 
 require 'optparse'
 require 'fileutils'
+require 'open3'
 
 module Anyspec
   class CLI
@@ -16,8 +17,10 @@ module Anyspec
         config_path: nil,
         auth_mode: nil,
         fail_on: nil,
-        oci_cli: nil
+        oci_cli: nil,
+        adapters_dir: ENV['ANYSPEC_ADAPTERS_DIR']
       }
+      @external_adapter_info = nil
     end
 
     def run
@@ -85,6 +88,10 @@ module Anyspec
           @options[:oci_cli] = path
         end
 
+        opts.on('--adapters-dir DIR', 'Directory with external adapter definitions (multiple via path separator)') do |dir|
+          @options[:adapters_dir] = dir
+        end
+
         opts.on('-h', '--help', 'Show this help') do
           puts opts
           exit 0
@@ -116,6 +123,8 @@ module Anyspec
 
       run_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
+      load_external_adapters
+
       config = Config.new(
         profile: @options[:profile],
         config_path: @options[:config_path],
@@ -137,7 +146,11 @@ module Anyspec
         profile: config.profile,
         region: config.region,
         auth_mode: config.auth_mode,
-        duration_ms: duration_ms
+        duration_ms: duration_ms,
+        anyspec_version: Anyspec::VERSION,
+        adapter_schema_version: ExternalAdapterLoader.schema_version,
+        oci_cli_version: detect_oci_cli_version(config),
+        external_adapters: @external_adapter_info
       }
 
       write_reports(results, summary, run_metadata)
@@ -195,6 +208,8 @@ module Anyspec
         $stderr.puts "Error: #{spec_path} not found"
         return 1
       end
+
+      load_external_adapters
 
       validator = Validator.new
       valid = validator.validate(spec_path)
@@ -275,6 +290,28 @@ module Anyspec
       end
     end
 
+    def load_external_adapters
+      adapter_loader = ExternalAdapterLoader.new(adapters_dir: @options[:adapters_dir])
+      adapter_loader.load_all
+      @external_adapter_info = AdapterRegistry.external_adapter_info
+
+      if @external_adapter_info[:loaded_files].any?
+        puts "Loaded external adapters from: #{@external_adapter_info[:loaded_files].join(', ')}"
+        @external_adapter_info[:overridden_builtins].each do |override|
+          puts "  Note: Built-in '#{override[:type]}' overridden by #{override[:source_file]}"
+        end
+      end
+    end
+
+    def detect_oci_cli_version(config)
+      stdout, _stderr, status = Open3.capture3(config.oci_cli_path, '--version')
+      return nil unless status.success?
+
+      stdout.strip.sub(/^oci\s+/i, '')
+    rescue StandardError
+      nil
+    end
+
     def print_help
       puts <<~HELP
         Usage: anyspec <command> [options]
@@ -291,6 +328,8 @@ module Anyspec
           --config PATH       Path to OCI config file (default: ~/.oci/config)
           --auth-mode MODE    OCI auth: config_file (default), instance_principal, resource_principal
           --oci-cli PATH      Path to OCI CLI executable (default: oci, or OCI_CLI env var)
+          --adapters-dir DIR  Directory with external adapter definitions (canonical source)
+                              Multiple directories via platform path separator (: on Unix, ; on Windows)
           --fail-on MODE      When to exit non-zero (default: both fail and error exit non-zero)
                               fail:  Exit 1 on drift, exit 2 on errors only
                               error: Exit 2 on errors only (drift exits 0)
@@ -299,10 +338,18 @@ module Anyspec
           -v, --version       Show version
 
         Environment Variables:
-          OCI_CLI             Path to OCI CLI executable
-          OCI_CLI_CONFIG_FILE Path to OCI config file
-          OCI_AUTH_MODE       Override auth mode (config_file, instance_principal, resource_principal)
-          OCI_REGION          Region for instance/resource principal auth
+          OCI_CLI                  Path to OCI CLI executable
+          OCI_CLI_CONFIG_FILE      Path to OCI config file
+          OCI_AUTH_MODE            Override auth mode (config_file, instance_principal, resource_principal)
+          OCI_REGION               Region for instance/resource principal auth
+          ANYSPEC_ADAPTERS_DIR     External adapter definitions directory (same as --adapters-dir)
+
+        External Adapters:
+          Search order (higher priority wins on type-name conflicts):
+          1. --adapters-dir / ANYSPEC_ADAPTERS_DIR (canonical source for version control)
+          2. adapters/ directory beside the executable
+          3. .anyspec/adapters/ in current directory (personal/trial use)
+          4. ~/.anyspec/adapters/ in home directory (personal/trial use)
 
         GitHub Actions Integration:
           When GITHUB_ACTIONS=true is detected:
@@ -320,6 +367,7 @@ module Anyspec
           anyspec check examples/ --out-dir ./reports
           anyspec check spec.yml --profile PRODUCTION
           anyspec check spec.yml --auth-mode instance_principal
+          anyspec check spec.yml --adapters-dir ./adapters
           anyspec check spec.yml --fail-on never
           anyspec validate examples/
           anyspec validate spec.yml

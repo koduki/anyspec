@@ -65,13 +65,18 @@ Options:
   --profile NAME      OCI 設定プロファイル名 (デフォルト: DEFAULT)
   --config PATH       OCI 設定ファイルのパス (デフォルト: ~/.oci/config)
   --auth-mode MODE    認証方式: config_file (デフォルト), instance_principal, resource_principal
+  --oci-cli PATH      OCI CLI 実行ファイルのパス (デフォルト: oci, または OCI_CLI 環境変数)
+  --adapters-dir DIR  外部アダプター定義ディレクトリ (複数はパス区切り文字で指定)
   --fail-on MODE      終了コードの制御 (下記参照)
   -h, --help          ヘルプを表示
   -v, --version       バージョンを表示
 
 環境変数:
-  OCI_AUTH_MODE       認証方式を上書き
-  OCI_REGION          インスタンス/リソースプリンシパル認証時のリージョン
+  OCI_CLI                  OCI CLI 実行ファイルのパス
+  OCI_CLI_CONFIG_FILE      OCI 設定ファイルのパス
+  OCI_AUTH_MODE            認証方式を上書き
+  OCI_REGION               インスタンス/リソースプリンシパル認証時のリージョン
+  ANYSPEC_ADAPTERS_DIR     外部アダプター定義ディレクトリ (--adapters-dir と同等)
 ```
 
 ### --fail-on オプション
@@ -588,9 +593,96 @@ OCI Compute インスタンスや OKE で実行するセルフホストランナ
 
 ## アダプターの追加方法
 
-新しいリソースタイプをサポートするには:
+### 方法 1: 外部 YAML 定義 (推奨)
 
-1. `lib/anyspec/adapters/` に新しいアダプターを作成
+バイナリを再ビルドせずに新しいリソースタイプを追加できます。YAML ファイルで OCI CLI コマンドを定義するだけで、anyspec が自動的に認識します。
+
+**重要**: 本番環境や CI では、アダプター定義をスペック YAML と同じリポジトリにバージョン管理し、`--adapters-dir` で読み込んでください。これにより、アダプター定義も「動く設計書」の一部として追跡できます。
+
+```bash
+# 推奨: バージョン管理されたアダプター定義
+anyspec check specs/ --adapters-dir ./adapters
+
+# または環境変数で指定
+export ANYSPEC_ADAPTERS_DIR=./adapters
+anyspec check specs/
+```
+
+#### 検索パス (上位が優先)
+
+1. `--adapters-dir` / `ANYSPEC_ADAPTERS_DIR` (本番用、バージョン管理推奨)
+2. 実行ファイルと同じディレクトリの `adapters/`
+3. カレントディレクトリの `.anyspec/adapters/` (個人実験用)
+4. ホームディレクトリの `~/.anyspec/adapters/` (個人実験用)
+
+#### YAML 定義フォーマット
+
+1ファイルに複数のアダプタータイプを定義できます:
+
+```yaml
+# adapters/adapters.yml
+schema_version: "1.0"
+
+adapters:
+  - type: vcn_security_list
+    locators:
+      # 方法1: ID による直接取得
+      - subcommand: network security-list get
+        required_fields: [security_list_id]
+        flag_mappings:
+          security_list_id: --security-list-id
+        extract_fields:
+          - id
+          - display_name
+          - lifecycle_state
+
+      # 方法2: 名前で検索
+      - subcommand: network security-list list
+        required_fields: [compartment_id, name]
+        flag_mappings:
+          compartment_id: --compartment-id
+        static_flags:
+          - { "--limit": "100" }
+        list_filter_field: display-name
+        list_filter_spec_field: name
+        extract_fields:
+          - id
+          - display_name
+
+  - type: network_security_group
+    locators:
+      - subcommand: network nsg get
+        required_fields: [nsg_id]
+        flag_mappings:
+          nsg_id: --nsg-id
+        extract_fields:
+          - id
+          - display_name
+          - lifecycle_state
+```
+
+#### ビルトインアダプターのオーバーライド
+
+同じタイプ名の外部定義は、ビルトインをオーバーライドします。実行時にログで通知されます:
+
+```
+Loaded external adapters from: ./adapters/adapters.yml
+  Note: Built-in 'audit_configuration' overridden by ./adapters/adapters.yml
+```
+
+#### 外部アダプターの対応範囲
+
+外部 YAML アダプターは単純な get/list + フィールド抽出に適しています。以下の場合は Ruby アダプターが必要です:
+
+- 複雑なネスト照合ロジック
+- 複数リソースの組み合わせ
+- カスタム JSON 処理
+- ページネーションを超える複雑なリスト処理
+- OCI 以外のクラウド
+
+### 方法 2: Ruby アダプター (開発者向け、要リビルド)
+
+複雑なロジックが必要な場合、OCI CLI を使用する Ruby アダプターを作成できます:
 
 ```ruby
 # lib/anyspec/adapters/my_resource.rb
@@ -600,13 +692,14 @@ module Anyspec
       ADAPTER_TYPE = 'my_resource'
 
       def fetch(spec)
-        # create_client ヘルパーを使用（インスタンスプリンシパル対応）
-        client = create_client(OCI::SomeService::Client)
-        response = client.get_resource(spec['resource_id'])
-        
+        args = ['my-service', 'resource', 'get', '--resource-id', spec['resource_id']]
+        data = run_oci_cli(args)
+        normalized = normalize_oci_response(data)
+
         {
-          'field1' => response.data.field1,
-          'field2' => response.data.field2
+          'id' => normalized['id'],
+          'name' => normalized['display_name'],
+          'status' => normalized['lifecycle_state']
         }
       end
     end
@@ -616,9 +709,9 @@ module Anyspec
 end
 ```
 
-2. `lib/anyspec.rb` に require を追加
-
-3. テストを追加
+1. `lib/anyspec.rb` に require を追加
+2. テストを追加
+3. Spinel で再ビルド
 
 ## ユースケース
 
