@@ -151,6 +151,18 @@ OCIDのようにドットを含むキーを設定する場合に使用します�
 set_key $obj "ocid1.domain.oc1..xxx" $value
 ```
 
+### `pairs_to_map arr key_field value_field`
+`{key_field: k, value_field: v}` 形式のオブジェクト配列をマップに変換します。
+foreach の結果からマップを構築する際に使用します。
+
+```
+# foreach の結果からマップを構築
+$pairs = foreach item in $items {
+  { "id": $item.id, "data": $item.value }
+}
+$map = pairs_to_map $pairs 'id' 'data'
+```
+
 ### `build path value`
 パスから動的にネストされたオブジェクトを構築します。
 

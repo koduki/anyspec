@@ -1,10 +1,6 @@
 # OCI Identity Domains Configuration Collector
 # Collects security-related configuration from all Identity Domains in a tenancy
 
-# Initialize result structure
-$result = { "domains": {}, "warnings": [] }
-$collected_warnings = []
-
 # Get tenancy OCID from environment
 $tenancy_ocid = $TENANCY_OCID
 
@@ -21,8 +17,8 @@ $all_domain_lists = foreach compartment in $active_compartments {
 $all_domains = flatten $all_domain_lists
 $all_domains = unique_by $all_domains 'id'
 
-# Step 3: For each domain, collect configuration
-foreach domain in $all_domains {
+# Step 3: For each domain, collect configuration (returns array of {id, data} pairs)
+$domain_results = foreach domain in $all_domains {
   $domain_id = $domain.id
   $endpoint = $domain.url
   $domain_name = $domain["display-name"]
@@ -232,11 +228,13 @@ foreach domain in $all_domains {
   # Sort keys for consistent output
   $domain_data = sort_keys $domain_data
   
-  # Store domain data (use set_key to preserve dots in OCID)
-  $domains = get_opt $result 'domains' {}
-  $domains = set_key $domains $domain_id $domain_data
-  $result = set_at $result 'domains' $domains
+  # Return domain id and data pair (foreach collects these into array)
+  { "id": $domain_id, "data": $domain_data }
 }
 
+# Build final result from foreach results (outside foreach scope)
+# pairs_to_map converts [{id: k1, data: v1}, ...] to {k1: v1, ...}
+$domains_map = pairs_to_map $domain_results 'id' 'data'
+
 # Return result
-$result
+{ "domains": $domains_map, "warnings": [] }

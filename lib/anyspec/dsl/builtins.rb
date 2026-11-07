@@ -195,6 +195,18 @@ module Anyspec
           result
         end
 
+        register('pairs_to_map') do |args, interp, loc|
+          arr, key_field, value_field = args
+          raise_unless_array(arr, 'pairs_to_map', loc)
+          result = {}
+          arr.each do |item|
+            key = get_path(item, key_field, strict: false)&.to_s
+            value = get_path(item, value_field, strict: false)
+            result[key] = value
+          end
+          result
+        end
+
         register('keys') do |args, interp, loc|
           obj = args[0]
           raise_unless_hash(obj, 'keys', loc)

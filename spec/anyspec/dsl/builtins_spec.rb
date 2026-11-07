@@ -227,6 +227,33 @@ RSpec.describe Anyspec::DSL::Builtins do
       end
     end
 
+    describe 'pairs_to_map' do
+      it 'converts array of pairs to map' do
+        result = run(<<~DSL)
+          $pairs = [{ "id": "a", "data": 1 }, { "id": "b", "data": 2 }]
+          pairs_to_map $pairs 'id' 'data'
+        DSL
+        expect(result['a']).to eq(1)
+        expect(result['b']).to eq(2)
+      end
+
+      it 'handles keys with dots (like OCIDs)' do
+        result = run(<<~DSL)
+          $pairs = [{ "id": "ocid1.domain.oc1..xxx", "data": { "name": "test" } }]
+          pairs_to_map $pairs 'id' 'data'
+        DSL
+        expect(result['ocid1.domain.oc1..xxx']).to eq({ 'name' => 'test' })
+      end
+
+      it 'overwrites duplicate keys (last wins)' do
+        result = run(<<~DSL)
+          $pairs = [{ "id": "a", "data": 1 }, { "id": "a", "data": 2 }]
+          pairs_to_map $pairs 'id' 'data'
+        DSL
+        expect(result['a']).to eq(2)
+      end
+    end
+
     describe 'keys and values' do
       it 'returns object keys' do
         result = run('$obj = { "a": 1, "b": 2 }' + "\n" + 'keys $obj')

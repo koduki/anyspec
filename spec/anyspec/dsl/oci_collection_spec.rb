@@ -262,6 +262,54 @@ RSpec.describe 'OCI Identity Domains Collection Mechanism' do
     end
   end
 
+  describe 'foreach scoping regression (domains not empty)' do
+    it 'foreach does not persist outer variable assignments' do
+      result = run(<<~DSL)
+        $result = {}
+        $items = [{ "id": "a", "val": 1 }, { "id": "b", "val": 2 }]
+        foreach item in $items {
+          $result = set_key $result $item.id $item.val
+        }
+        $result
+      DSL
+
+      # This should be empty because assignments in foreach don't persist
+      expect(result).to eq({})
+    end
+
+    it 'foreach result collection pattern works for building maps' do
+      result = run(<<~DSL)
+        $items = [{ "id": "a", "val": 1 }, { "id": "b", "val": 2 }]
+        $pairs = foreach item in $items {
+          { "key": $item.id, "value": $item.val }
+        }
+        pairs_to_map $pairs 'key' 'value'
+      DSL
+
+      expect(result).to eq({ 'a' => 1, 'b' => 2 })
+    end
+
+    it 'collector pattern: domains map is built from foreach results' do
+      result = run(<<~DSL)
+        $domains = [
+          { "id": "ocid1.domain.oc1..aaa", "name": "Domain1" },
+          { "id": "ocid1.domain.oc1..bbb", "name": "Domain2" }
+        ]
+        $domain_results = foreach domain in $domains {
+          $domain_id = $domain.id
+          $domain_data = { "meta": { "name": $domain.name }, "collections": {} }
+          { "id": $domain_id, "data": $domain_data }
+        }
+        $domains_map = pairs_to_map $domain_results 'id' 'data'
+        { "domains": $domains_map }
+      DSL
+
+      expect(result['domains'].keys.length).to eq(2)
+      expect(result['domains']['ocid1.domain.oc1..aaa']['meta']['name']).to eq('Domain1')
+      expect(result['domains']['ocid1.domain.oc1..bbb']['meta']['name']).to eq('Domain2')
+    end
+  end
+
   describe 'Pagination opc-total-items validation' do
     it 'validates count against string opc-total-items' do
       mock_responses = {
