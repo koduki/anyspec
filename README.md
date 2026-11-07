@@ -536,20 +536,20 @@ bundle exec rspec spec/anyspec
 
 CI では Ubuntu、macOS、Windows の全プラットフォームでテストを実行しています。
 
-## Mac でのビルド
+## Spinel バイナリのビルド
 
-Mac で開発・テストする場合は CRuby を直接使用できます。配布用の Spinel バイナリをビルドする場合は以下の方法があります。
+開発・テストには CRuby を直接使用できます。配布用の Spinel バイナリをビルドする場合は以下の方法があります。
 
-### 方法 1: Docker でビルド (推奨)
+### Linux バイナリ (Docker)
 
-Docker (Docker Desktop, Colima, OrbStack など) を使って Linux バイナリをビルドできます。
+Docker (Docker Desktop, Colima, OrbStack など) を使って Linux バイナリをビルドできます。Mac や Linux ホストから実行可能です。
 
 ```bash
 # ヘルパースクリプトを使用
 ./scripts/build-linux-binary.sh
 
 # または直接 Docker を使用
-docker build -t anyspec-builder .
+docker build --target extractor -t anyspec-builder .
 docker run --rm -v $(pwd)/dist:/output anyspec-builder
 ```
 
@@ -565,11 +565,9 @@ docker run --rm -v $(pwd)/dist:/output anyspec-builder
 ./scripts/build-linux-binary.sh --platform linux/arm64
 ```
 
-**重要**: この方法で生成されるのは **Linux バイナリ**です。macOS ネイティブバイナリではありません。
-- Linux サーバーや Linux コンテナ上で実行する場合に使用
-- macOS 上で直接実行することはできません
+**重要**: この方法で生成されるのは **Linux バイナリ**です。macOS/Windows ネイティブバイナリではありません。
 
-### 方法 2: macOS 上で直接 Spinel ビルド
+### macOS ネイティブバイナリ
 
 macOS ネイティブバイナリが必要な場合は、Spinel を macOS に直接インストールしてビルドします:
 
@@ -591,21 +589,88 @@ spin build
 
 **依存関係**: Xcode Command Line Tools (`xcode-select --install`) が必要です。
 
+### Windows ネイティブバイナリ (.exe)
+
+Spinel は Windows ネイティブの `.exe` ビルドをサポートしています。MSYS2 または RubyInstaller Devkit が必要です。
+
+#### 前提条件
+
+以下のいずれかをインストール:
+- **MSYS2** (推奨): https://www.msys2.org/
+- **RubyInstaller with Devkit**: https://rubyinstaller.org/
+
+MSYS2 UCRT64 シェルで必要なパッケージをインストール:
+
+```bash
+pacman -S --needed make diffutils curl tar git mingw-w64-ucrt-x86_64-gcc
+pacman -S --needed mingw-w64-ucrt-x86_64-ruby  # MSYS2 のみ (Devkit は不要)
+```
+
+#### Spinel のビルド (初回のみ)
+
+MSYS2 UCRT64 シェルで:
+
+```bash
+git clone https://github.com/matz/spinel.git
+cd spinel
+make deps && make
+
+# PATH に追加
+export PATH="$PWD/bin:$PATH"
+```
+
+#### anyspec のビルド
+
+MSYS2 UCRT64 シェルで:
+
+```bash
+# SPINEL_SHELL を設定 (spin コマンドに必要)
+export SPINEL_SHELL=/usr/bin/sh
+
+# anyspec ディレクトリへ移動
+cd /path/to/anyspec
+
+# ビルド
+spin build
+```
+
+または、ヘルパースクリプトを使用:
+
+```bash
+./scripts/build-windows-binary.sh
+```
+
+PowerShell から実行する場合:
+
+```powershell
+.\scripts\build-windows-binary.ps1
+```
+
+ビルドされたバイナリは `build/bin/anyspec.exe` (または `dist/anyspec.exe`) に出力されます。
+
+#### Windows ビルドの注意事項
+
+- **コミュニティメンテナンス**: Spinel の Windows サポートはコミュニティメンテナンスで、master より遅れる可能性があります ([参照](https://github.com/matz/spinel/blob/master/docs/windows.md))
+- **クロスコンパイル不可**: Linux/macOS から Windows バイナリをクロスコンパイルすることはできません。Windows 上でビルドする必要があります
+- **WSL 代替**: WSL (Windows Subsystem for Linux) を使用する場合は、Linux バイナリとしてビルドできます
+
 ### サポートするターゲットプラットフォーム
 
-| プラットフォーム | ビルド方法 | 備考 |
-|-----------------|-----------|------|
-| Linux x86-64 | Docker (linux/amd64) | 最も一般的 |
-| Linux ARM64 | Docker (linux/arm64) | AWS Graviton, Raspberry Pi 64-bit |
-| macOS Intel | macOS 上で直接ビルド | |
-| macOS Apple Silicon | macOS 上で直接ビルド | |
-| Windows | WSL 上でビルド | Spinel は WSL を推奨 |
+| プラットフォーム | ビルド方法 | 出力 | 備考 |
+|-----------------|-----------|------|------|
+| Linux x86-64 | Docker (linux/amd64) | `anyspec` | 最も一般的、サーバー向け |
+| Linux ARM64 | Docker (linux/arm64) | `anyspec` | AWS Graviton, Raspberry Pi 64-bit |
+| macOS Intel | macOS 上で直接ビルド | `anyspec` | Xcode CLT 必要 |
+| macOS Apple Silicon | macOS 上で直接ビルド | `anyspec` | Xcode CLT 必要 |
+| Windows x64 | Windows (MSYS2) で直接ビルド | `anyspec.exe` | MSYS2 UCRT64 必要 |
+| Windows (WSL) | WSL 内で Docker または直接ビルド | `anyspec` (Linux) | WSL2 推奨 |
 
 ### 注意事項
 
 - 生成されるバイナリは `oci` CLI を外部依存として呼び出します
 - `oci` CLI はバイナリに同梱**されません**—実行環境に別途インストールが必要です
 - CI 環境では `oci` CLI のメジャーバージョンを固定することを推奨します
+- Windows では OCI CLI for Windows を使用: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm
 
 ## CI/CD での利用
 

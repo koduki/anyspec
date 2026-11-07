@@ -2,10 +2,11 @@
 # Produces a standalone Linux executable that can be distributed
 #
 # Usage:
-#   docker build -t anyspec-builder .
-#   docker run --rm -v $(pwd)/dist:/dist anyspec-builder
+#   docker build --target extractor -t anyspec-builder .
+#   docker run --rm -v $(pwd)/dist:/output anyspec-builder
 #
 # The binary will be output to ./dist/anyspec
+# Or use the helper script: ./scripts/build-linux-binary.sh
 #
 # Platform support:
 #   - linux/amd64 (Intel/AMD 64-bit)
