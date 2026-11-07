@@ -54,17 +54,59 @@ function Test-Command {
 }
 
 function Find-MSYS2 {
+    # Standalone MSYS2 locations
     $locations = @(
         "$env:SystemDrive\msys64",
         "$env:ProgramFiles\msys64",
         "${env:ProgramFiles(x86)}\msys64"
     )
     
+    # Check standalone MSYS2 first
     foreach ($loc in $locations) {
         if (Test-Path "$loc\usr\bin\bash.exe") {
-            return $loc
+            return @{ Path = $loc; Type = "standalone" }
         }
     }
+    
+    # Check RubyInstaller Devkit paths
+    # RubyInstaller installs MSYS2 under the Ruby directory
+    $rubyPaths = @()
+    
+    # Common RubyInstaller locations
+    $rubyPaths += Get-ChildItem -Path "$env:SystemDrive\" -Filter "Ruby*" -Directory -ErrorAction SilentlyContinue | 
+        ForEach-Object { $_.FullName }
+    $rubyPaths += Get-ChildItem -Path "$env:ProgramFiles\" -Filter "Ruby*" -Directory -ErrorAction SilentlyContinue | 
+        ForEach-Object { $_.FullName }
+    
+    # Check registry for RubyInstaller
+    try {
+        $regPaths = @(
+            "HKLM:\SOFTWARE\RubyInstaller",
+            "HKCU:\SOFTWARE\RubyInstaller",
+            "HKLM:\SOFTWARE\WOW6432Node\RubyInstaller"
+        )
+        foreach ($regPath in $regPaths) {
+            if (Test-Path $regPath) {
+                Get-ChildItem -Path $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+                    $installPath = (Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue).InstallPath
+                    if ($installPath) {
+                        $rubyPaths += $installPath
+                    }
+                }
+            }
+        }
+    } catch {
+        # Registry access may fail, continue with filesystem paths
+    }
+    
+    # Check each Ruby path for Devkit's MSYS2
+    foreach ($rubyPath in $rubyPaths | Select-Object -Unique) {
+        $devkitPath = Join-Path $rubyPath "msys64"
+        if (Test-Path "$devkitPath\usr\bin\bash.exe") {
+            return @{ Path = $devkitPath; Type = "devkit"; RubyPath = $rubyPath }
+        }
+    }
+    
     return $null
 }
 
@@ -110,10 +152,10 @@ $ProjectRoot = Split-Path -Parent $ScriptDir
 Write-Host "Project root: $ProjectRoot"
 Write-Host "Output directory: $OutputDir"
 
-# Check for MSYS2
-Write-Step "Checking for MSYS2"
-$MSYS2Path = Find-MSYS2
-if (-not $MSYS2Path) {
+# Check for MSYS2 or RubyInstaller Devkit
+Write-Step "Checking for MSYS2 / RubyInstaller Devkit"
+$MSYS2Info = Find-MSYS2
+if (-not $MSYS2Info) {
     Write-Host @"
 MSYS2 not found in standard locations.
 
@@ -125,12 +167,27 @@ Installation options:
    pacman -S --needed make diffutils curl tar git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ruby
 
 2. Or install RubyInstaller with Devkit: https://rubyinstaller.org/
-   Use `ridk enable` to access the MSYS2 toolchain.
+   Then run this script again, or use the bash script in a Devkit shell:
+   > ridk enable
+   > bash scripts/build-windows-binary.sh
 
 "@ -ForegroundColor Yellow
     Write-Error-Exit "MSYS2 not found. Please install MSYS2 or RubyInstaller Devkit."
 }
-Write-Host "Found MSYS2 at: $MSYS2Path" -ForegroundColor Green
+
+$MSYS2Path = $MSYS2Info.Path
+$MSYS2Type = $MSYS2Info.Type
+
+if ($MSYS2Type -eq "devkit") {
+    Write-Host "Found RubyInstaller Devkit MSYS2 at: $MSYS2Path" -ForegroundColor Green
+    Write-Host "  (Ruby installation: $($MSYS2Info.RubyPath))" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Note: For Devkit environments, you may also run in a Devkit shell:" -ForegroundColor Yellow
+    Write-Host "  > ridk enable" -ForegroundColor Yellow
+    Write-Host "  > bash scripts/build-windows-binary.sh" -ForegroundColor Yellow
+} else {
+    Write-Host "Found standalone MSYS2 at: $MSYS2Path" -ForegroundColor Green
+}
 
 # Check for Spinel
 Write-Step "Checking for Spinel"

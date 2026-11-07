@@ -95,7 +95,7 @@ bundle exec ruby -Ilib bin/anyspec check examples/oci-guardrails.yml
 
 ### 配布バイナリ (Spinel)
 
-配布用の単一バイナリは Spinel でビルドします。詳細は [Mac でのビルド](#mac-でのビルド) を参照してください。
+配布用の単一バイナリは Spinel でビルドします。詳細は [Spinel バイナリのビルド](#spinel-バイナリのビルド) を参照してください。
 
 ビルド済みバイナリを使う場合:
 
