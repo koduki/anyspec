@@ -97,22 +97,40 @@ module Anyspec
         end
 
         def scim_paginate_simple(base_cmd, location:)
-          response = @executor.execute(base_cmd, location: location)
-          response['Resources'] || response['resources'] || [response].compact
+          response = @executor.execute(base_cmd, location: location, preserve_envelope: true)
+          data = response.is_a?(Hash) && response.key?('data') ? response['data'] : response
+          unless data.is_a?(Hash)
+            raise PaginationError.new('SCIM response body must be an object', location)
+          end
+          resources = data['Resources'] || data['resources']
+          return resources if resources.is_a?(Array)
+          return [data] if data.key?('id')
+
+          raise PaginationError.new('SCIM response has no Resources array', location)
         end
 
         def scim_all(base_cmd, location:)
           cmd = base_cmd.dup
           cmd << '--all' unless cmd.include?('--all')
 
-          response = @executor.execute(cmd, location: location)
+          response = @executor.execute(cmd, location: location, preserve_envelope: true)
 
-          data = response['data'] || response
-          resources = data['Resources'] || data['resources'] || []
+          unless response.is_a?(Hash)
+            raise PaginationError.new('SCIM response must be an object', location)
+          end
+          data = response.key?('data') ? response['data'] : response
+          unless data.is_a?(Hash)
+            raise PaginationError.new('SCIM response body must be an object', location)
+          end
 
           opc_total = response['opc-total-items']
           total_from_data = data['totalResults'] || data['total-results']
-          expected_total = parse_total(opc_total, total_from_data)
+          expected_total = parse_total(opc_total, total_from_data, location)
+          resources = data['Resources'] || data['resources']
+          resources = [] if resources.nil? && expected_total == 0
+          unless resources.is_a?(Array)
+            raise PaginationError.new('SCIM response has no Resources array', location)
+          end
 
           seen_ids = Set.new
           resources.each do |resource|
@@ -135,14 +153,15 @@ module Anyspec
 
         private
 
-        def parse_total(opc_total, data_total)
-          if opc_total
-            opc_total.to_s.to_i
-          elsif data_total
-            data_total.to_i
-          else
-            nil
-          end
+        def parse_total(opc_total, data_total, location)
+          value = opc_total.nil? ? data_total : opc_total
+          return nil if value.nil?
+
+          result = value.is_a?(Integer) ? value : Integer(value, 10)
+          raise ArgumentError if result.negative?
+          result
+        rescue ArgumentError, TypeError
+          raise PaginationError.new("Invalid SCIM total: #{value.inspect}", location)
         end
 
         public
@@ -238,17 +257,8 @@ module Anyspec
               '--target-uri', full_uri
             ]
 
-            response = @executor.execute(cmd, location: location)
-            
-            body = response['data']&.is_a?(Hash) ? response['data'] : response
-            
-            if body.is_a?(String)
-              begin
-                body = JSON.parse(body)
-              rescue JSON::ParserError => e
-                raise PaginationError.new("Invalid JSON in raw-request response: #{e.message}", location)
-              end
-            end
+            response = @executor.execute(cmd, location: location, preserve_envelope: true)
+            body = raw_response_body(response, location: location)
 
             resources = body['Resources'] || body['resources'] || []
             total_results = body['totalResults'] || body['total-results'] || 0
@@ -278,6 +288,23 @@ module Anyspec
           end
 
           all_resources
+        end
+
+        def raw_response_body(response, location:)
+          unless response.is_a?(Hash) && response.key?('status') && response.key?('data')
+            raise PaginationError.new('raw-request response must include status and data', location)
+          end
+          status = response['status'].to_s
+          unless status.match?(/\A2\d\d(?:\s|\z)/)
+            raise CLIError.new("raw-request HTTP status: #{status}", location)
+          end
+          body = response['data']
+          body = JSON.parse(body) if body.is_a?(String)
+          raise PaginationError.new('raw-request body must be an object', location) unless body.is_a?(Hash)
+
+          body
+        rescue JSON::ParserError => e
+          raise PaginationError.new("Invalid JSON in raw-request response: #{e.message}", location)
         end
       end
     end

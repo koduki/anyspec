@@ -162,19 +162,17 @@ module Anyspec
               if path.include?('SsoSettings') && !path.include?('startIndex')
                 full_uri = "#{endpoint}#{path}"
                 cmd = ['oci', 'raw-request', '--http-method', 'GET', '--target-uri', full_uri]
-                response = @executor.execute(cmd, location: loc)
-                body = response['data']
-                if body.is_a?(String)
-                  begin
-                    parsed = JSON.parse(body)
-                    parsed['Resources'] || parsed['resources'] || [parsed]
-                  rescue JSON::ParserError
-                    []
-                  end
-                elsif body.is_a?(Hash)
-                  body['Resources'] || body['resources'] || [body]
-                else
+                response = @executor.execute(cmd, location: loc, preserve_envelope: true)
+                body = @pagination.raw_response_body(response, location: loc)
+                resources = body['Resources'] || body['resources']
+                if resources.is_a?(Array)
+                  resources
+                elsif body.key?('id')
+                  [body]
+                elsif (body['totalResults'] || body['total-results']) == 0
                   []
+                else
+                  raise PaginationError.new('SsoSettings response has no Resources array', loc)
                 end
               else
                 @pagination.raw_request_paginate(endpoint: endpoint, path: path, location: loc)

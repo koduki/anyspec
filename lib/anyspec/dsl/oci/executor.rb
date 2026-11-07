@@ -25,7 +25,7 @@ module Anyspec
           @max_output = max_output
         end
 
-        def execute(argv, location: nil)
+        def execute(argv, location: nil, preserve_envelope: false)
           validate_command(argv, location)
           cmd_array = build_command_array(argv)
           
@@ -37,7 +37,7 @@ module Anyspec
             return []
           end
           
-          parse_response(stdout, location)
+          parse_response(stdout, location, preserve_envelope: preserve_envelope)
         end
 
         private
@@ -130,7 +130,7 @@ module Anyspec
           cmd_str.include?('iam') && cmd_str.include?('list')
         end
 
-        def parse_response(stdout, location)
+        def parse_response(stdout, location, preserve_envelope: false)
           begin
             response = JSON.parse(stdout)
           rescue JSON::ParserError => e
@@ -141,7 +141,9 @@ module Anyspec
             raise CLIError.new("SCIM Error: #{response['detail'] || response['status']}", location)
           end
 
-          response.key?('data') ? response['data'] : response
+          return response if preserve_envelope
+
+          response.is_a?(Hash) && response.key?('data') ? response['data'] : response
         end
 
         def scim_error?(response)

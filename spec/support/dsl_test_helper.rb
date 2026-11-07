@@ -86,7 +86,7 @@ module DSLTestHelper
       @calls = []
     end
 
-    def execute(argv, location: nil)
+    def execute(argv, location: nil, preserve_envelope: false)
       @calls << { argv: argv, location: location }
 
       response = find_response(argv)
