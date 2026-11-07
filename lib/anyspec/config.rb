@@ -5,14 +5,15 @@ module Anyspec
     AUTH_MODES = %w[config_file instance_principal resource_principal].freeze
     DEFAULT_OCI_CLI = 'oci'
 
-    attr_reader :profile, :auth_mode, :config_path, :region, :oci_cli_path
+    attr_reader :profile, :auth_mode, :config_path, :region, :oci_cli_path, :allow_oci_writes
 
-    def initialize(profile: 'DEFAULT', config_path: nil, auth_mode: nil, region: nil, oci_cli: nil)
+    def initialize(profile: 'DEFAULT', config_path: nil, auth_mode: nil, region: nil, oci_cli: nil, allow_oci_writes: false)
       @profile = profile
       @auth_mode = determine_auth_mode(auth_mode)
       @config_path = determine_config_path(config_path)
       @region = region || ENV['OCI_REGION']
       @oci_cli_path = determine_oci_cli_path(oci_cli)
+      @allow_oci_writes = allow_oci_writes
     end
 
     private

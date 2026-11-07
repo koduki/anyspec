@@ -196,6 +196,19 @@ RSpec.describe Anyspec::CLI do
       expect(result).to eq(1)
     end
 
+    it 'requires explicit opt-in to pass a mutating OCI command to the configured CLI' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'write.flow')
+        File.write(path, 'oci iam domain delete --domain-id example --force')
+        args = ['run', path, '--oci-cli', FAKE_OCI_CLI, '--out-dir', dir]
+        status = nil
+        expect { status = described_class.new(args.dup).run }.to output(/not read-only/).to_stderr
+        expect(status).to eq(2)
+        expect { status = described_class.new(args + ['--allow-oci-writes']).run }.to output(/OCI CLI failed/).to_stderr
+        expect(status).to eq(2) # the fake CLI does not implement writes
+      end
+    end
+
     it 'parses --out-dir option' do
       cli = described_class.new(['--out-dir', '/custom/output', 'help'])
       cli.run

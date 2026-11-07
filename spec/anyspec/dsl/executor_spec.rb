@@ -91,6 +91,37 @@ RSpec.describe Anyspec::DSL::OCI::Executor do
       expect(result).to eq({ 'Resources' => [], 'totalResults' => 0 })
     end
   end
+
+  describe 'read-only command policy' do
+    let(:executor) { described_class.new(config: config) }
+
+    it 'permits list, get and one raw GET method' do
+      allow(executor).to receive(:run_with_timeout).and_return(['{"data": {}}', '', double(success?: true)])
+      [ %w[oci iam domain list], %w[oci identity-domains group get --group-id g],
+        %w[oci raw-request --http-method GET --target-uri https://example.test],
+        %w[oci raw-request --http-method=GET --target-uri https://example.test] ].each do |argv|
+        expect { executor.execute(argv) }.not_to raise_error
+      end
+    end
+
+    it 'rejects mutations, conflicting methods and credentials overrides before spawning' do
+      expect(executor).not_to receive(:run_with_timeout)
+      [ %w[oci iam domain delete --domain-id x --force],
+        %w[oci raw-request --http-method POST --target-uri https://example.test],
+        %w[oci raw-request --http-method GET --http-method=DELETE --target-uri https://example.test],
+        %w[oci iam domain list --profile other], %w[oci iam domain list --config-file=other],
+        %w[/tmp/oci iam domain list], [] ].each do |argv|
+        expect { executor.execute(argv) }.to raise_error(Anyspec::DSL::OCI::ExecutorError)
+      end
+    end
+
+    it 'requires an explicit opt-in for other OCI operations' do
+      write_config = Anyspec::Config.new(oci_cli: '/bin/echo', allow_oci_writes: true)
+      write_executor = described_class.new(config: write_config)
+      allow(write_executor).to receive(:run_with_timeout).and_return(['{"data": {}}', '', double(success?: true)])
+      expect { write_executor.execute(%w[oci iam domain delete --domain-id x]) }.not_to raise_error
+    end
+  end
 end
 
 RSpec.describe 'OCI Executor process limits' do

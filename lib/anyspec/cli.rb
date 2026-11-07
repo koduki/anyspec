@@ -18,6 +18,7 @@ module Anyspec
         auth_mode: nil,
         fail_on: nil,
         oci_cli: nil,
+        allow_oci_writes: false,
         adapters_dir: ENV['ANYSPEC_ADAPTERS_DIR']
       }
       @external_adapter_info = nil
@@ -29,6 +30,11 @@ module Anyspec
       return 0 if @options[:displayed_option]
 
       command = @argv.shift
+
+      if @options[:allow_oci_writes] && command != 'run'
+        $stderr.puts 'Error: --allow-oci-writes applies only to DSL run'
+        return 1
+      end
 
       max_args = %w[check validate run].include?(command) ? 1 : 0
       if @argv.length > max_args
@@ -96,6 +102,10 @@ module Anyspec
 
         opts.on('--oci-cli PATH', 'Path to OCI CLI executable (default: oci, or OCI_CLI env var)') do |path|
           @options[:oci_cli] = path
+        end
+
+        opts.on('--allow-oci-writes', 'Allow non-read-only OCI commands in DSL scripts') do
+          @options[:allow_oci_writes] = true
         end
 
         opts.on('--adapters-dir DIR', 'Directory with external adapter definitions (multiple via path separator)') do |dir|
@@ -264,7 +274,8 @@ module Anyspec
         profile: @options[:profile],
         config_path: @options[:config_path],
         auth_mode: @options[:auth_mode],
-        oci_cli: @options[:oci_cli]
+        oci_cli: @options[:oci_cli],
+        allow_oci_writes: @options[:allow_oci_writes]
       )
 
       env_vars = {
@@ -399,6 +410,7 @@ module Anyspec
           --config PATH       Path to OCI config file (default: ~/.oci/config)
           --auth-mode MODE    OCI auth: config_file (default), instance_principal, resource_principal
           --oci-cli PATH      Path to OCI CLI executable (default: oci, or OCI_CLI env var)
+          --allow-oci-writes  Allow non-read-only OCI commands in DSL scripts (run only)
           --adapters-dir DIR  Directory with external adapter definitions (canonical source)
                               Multiple directories via platform path separator (: on Unix, ; on Windows)
           --fail-on MODE      When to exit non-zero (default: both fail and error exit non-zero)

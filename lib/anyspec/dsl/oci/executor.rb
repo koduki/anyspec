@@ -13,7 +13,8 @@ module Anyspec
       class CLIError < ExecutorError; end
 
       class Executor
-        ALLOWED_COMMANDS = ['oci'].freeze
+        READ_ACTIONS = %w[get list].freeze
+        RESTRICTED_OPTIONS = %w[--auth --profile --config-file --cli-rc-file --defaults-file --proxy].freeze
         DEFAULT_TIMEOUT = 300
         MAX_OUTPUT_SIZE = 100 * 1024 * 1024
 
@@ -43,15 +44,26 @@ module Anyspec
         private
 
         def validate_command(argv, location)
-          return if argv.empty?
-          
-          base_cmd = File.basename(argv.first.to_s)
-          unless ALLOWED_COMMANDS.include?(base_cmd)
-            raise ExecutorError.new(
-              "Command not allowed: #{base_cmd}. Allowed: #{ALLOWED_COMMANDS.join(', ')}",
-              location
-            )
+          unless argv.is_a?(Array) && argv.first == 'oci'
+            raise ExecutorError.new('Only the configured oci executable is allowed', location)
           end
+          return if @config.allow_oci_writes
+
+          args = argv.drop(1).map(&:to_s)
+          forbidden = args.find { |arg| RESTRICTED_OPTIONS.any? { |flag| arg == flag || arg.start_with?("#{flag}=") } }
+          raise ExecutorError.new("OCI option is controlled by anyspec: #{forbidden}", location) if forbidden
+
+          command = args.take_while { |arg| !arg.start_with?('-') }
+          if command == ['raw-request']
+            methods = args.each_with_index.filter_map do |arg, index|
+              arg == '--http-method' ? args[index + 1] : arg.delete_prefix('--http-method=') if arg == '--http-method' || arg.start_with?('--http-method=')
+            end
+            return if methods.length == 1 && methods.first.to_s.upcase == 'GET'
+          elsif command.length >= 2 && READ_ACTIONS.include?(command.last)
+            return
+          end
+
+          raise ExecutorError.new('OCI command is not read-only; use --allow-oci-writes to opt in', location)
         end
 
         def build_command_array(argv)
@@ -172,8 +184,8 @@ module Anyspec
         end
 
         def iam_list_command?(cmd_array)
-          cmd_str = cmd_array.join(' ')
-          cmd_str.include?('iam') && cmd_str.include?('list')
+          command = cmd_array.drop(1).take_while { |arg| !arg.start_with?('-') }
+          command.first == 'iam' && command.last == 'list'
         end
 
         def parse_response(stdout, location, preserve_envelope: false)
