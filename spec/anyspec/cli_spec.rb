@@ -124,6 +124,54 @@ RSpec.describe Anyspec::CLI do
   end
 
   describe 'option parsing' do
+    it 'applies options after the command and spec path' do
+      cli = described_class.new(['validate', File.join(__dir__, '../fixtures/valid_spec.yml'), '--profile', 'PROD'])
+      previous = ENV['TEST_COMPARTMENT_ID']
+      ENV['TEST_COMPARTMENT_ID'] = 'ocid1.test'
+      result = nil
+      expect { result = cli.run }.to output(/All specs valid/).to_stdout
+      expect(result).to eq(0)
+      expect(cli.instance_variable_get(:@options)[:profile]).to eq('PROD')
+    ensure
+      previous ? ENV['TEST_COMPARTMENT_ID'] = previous : ENV.delete('TEST_COMPARTMENT_ID')
+    end
+
+    it 'honors trailing check options when a drift is detected' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'spec.yml')
+        File.write(path, <<~YAML)
+          id: audit-drift
+          title: Audit drift
+          cloud: oci
+          type: audit_configuration
+          compartment_id: tenant
+          expect:
+            retention_period_days: 1
+        YAML
+        cli = described_class.new(['check', path, '--oci-cli', FAKE_OCI_CLI,
+                                   '--fail-on', 'never', '--out-dir', dir])
+        result = nil
+        expect { result = cli.run }.to output(/FAIL/).to_stdout
+        expect(result).to eq(0)
+        expect(JSON.parse(File.read(File.join(dir, 'result.json')))['results'].first['status']).to eq('fail')
+      end
+    end
+
+    it 'rejects unknown and missing options after positional arguments' do
+      [['validate', 'unused.yml', '--unknown'], ['check', 'unused.yml', '--profile']].each do |argv|
+        result = nil
+        expect { result = described_class.new(argv).run }.to output(/Error:/).to_stderr
+        expect(result).to eq(1)
+      end
+    end
+
+    it 'rejects extra positional arguments' do
+      result = nil
+      expect { result = described_class.new(['run', 'a.flow', 'extra']).run }
+        .to output(/unexpected argument/).to_stderr
+      expect(result).to eq(1)
+    end
+
     it 'parses --out-dir option' do
       cli = described_class.new(['--out-dir', '/custom/output', 'help'])
       cli.run

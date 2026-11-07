@@ -30,6 +30,12 @@ module Anyspec
 
       command = @argv.shift
 
+      max_args = %w[check validate run].include?(command) ? 1 : 0
+      if @argv.length > max_args
+        $stderr.puts "Error: unexpected argument(s): #{@argv.drop(max_args).join(' ')}"
+        return 1
+      end
+
       case command
       when 'check'
         run_check
@@ -107,8 +113,8 @@ module Anyspec
         end
       end
 
-      parser.order!(@argv)
-    rescue OptionParser::InvalidArgument => e
+      parser.permute!(@argv)
+    rescue OptionParser::ParseError => e
       $stderr.puts "Error: #{e.message}"
       @options[:parse_error] = true
     end
