@@ -72,21 +72,33 @@ module Anyspec
       end
 
       def filter_list_result(items, locator, spec)
-        return items.first || {} if items.empty?
-
         filter_field = locator['list_filter_field']
         filter_spec_field = locator['list_filter_spec_field']
 
         if filter_field && filter_spec_field && spec[filter_spec_field]
           expected_value = spec[filter_spec_field]
+
+          if items.empty?
+            raise Anyspec::Error, "No items returned from list command; cannot filter for #{filter_spec_field}='#{expected_value}'"
+          end
+
           found = items.find do |item|
             actual = item[filter_field] || item[kebab_to_snake(filter_field.to_s)]
             actual == expected_value
           end
-          return found || items.first || {}
+
+          unless found
+            raise Anyspec::Error, "No item found with #{filter_field}='#{expected_value}' in #{items.size} result(s)"
+          end
+
+          return found
         end
 
-        items.first || {}
+        if items.empty?
+          raise Anyspec::Error, "No items returned from list command"
+        end
+
+        items.first
       end
 
       def extract_fields(normalized, locator)

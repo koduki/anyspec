@@ -257,5 +257,92 @@ RSpec.describe Anyspec::Adapters::GenericCli do
         expect { adapter.fetch(spec) }.to raise_error(Anyspec::Error, /No matching locator/)
       end
     end
+
+    context 'with list filter errors' do
+      let(:definition) do
+        {
+          'type' => 'filterable_resource',
+          'locators' => [
+            {
+              'subcommand' => 'service resource list',
+              'required_fields' => %w[compartment_id name],
+              'flag_mappings' => {
+                'compartment_id' => '--compartment-id'
+              },
+              'list_filter_field' => 'display-name',
+              'list_filter_spec_field' => 'name',
+              'extract_fields' => %w[id display_name]
+            }
+          ]
+        }
+      end
+
+      before do
+        Anyspec::AdapterRegistry.register_external_definition('filterable_resource', definition, source_file: '/test/adapters.yml')
+      end
+
+      it 'raises error when list is empty and filter is specified' do
+        empty_output = { 'data' => [] }.to_json
+        allow(Open3).to receive(:capture3).and_return([empty_output, '', instance_double(Process::Status, success?: true)])
+
+        spec = { 'type' => 'filterable_resource', 'compartment_id' => 'ocid1.comp', 'name' => 'NonExistent' }
+
+        expect { adapter.fetch(spec) }.to raise_error(Anyspec::Error, /No items returned.*cannot filter/)
+      end
+
+      it 'raises error when no item matches the filter' do
+        list_output = {
+          'data' => [
+            { 'id' => 'res1', 'display-name' => 'Resource 1' },
+            { 'id' => 'res2', 'display-name' => 'Resource 2' }
+          ]
+        }.to_json
+        allow(Open3).to receive(:capture3).and_return([list_output, '', instance_double(Process::Status, success?: true)])
+
+        spec = { 'type' => 'filterable_resource', 'compartment_id' => 'ocid1.comp', 'name' => 'NonExistent' }
+
+        expect { adapter.fetch(spec) }.to raise_error(Anyspec::Error, /No item found.*NonExistent/)
+      end
+
+      it 'raises error when list is empty without filter' do
+        definition_no_filter = {
+          'type' => 'no_filter_resource',
+          'locators' => [
+            {
+              'subcommand' => 'service resource list',
+              'required_fields' => %w[compartment_id],
+              'flag_mappings' => {
+                'compartment_id' => '--compartment-id'
+              },
+              'extract_fields' => %w[id display_name]
+            }
+          ]
+        }
+        Anyspec::AdapterRegistry.register_external_definition('no_filter_resource', definition_no_filter, source_file: '/test/adapters.yml')
+
+        empty_output = { 'data' => [] }.to_json
+        allow(Open3).to receive(:capture3).and_return([empty_output, '', instance_double(Process::Status, success?: true)])
+
+        spec = { 'type' => 'no_filter_resource', 'compartment_id' => 'ocid1.comp' }
+
+        expect { adapter.fetch(spec) }.to raise_error(Anyspec::Error, /No items returned/)
+      end
+
+      it 'succeeds when filter matches an item' do
+        list_output = {
+          'data' => [
+            { 'id' => 'res1', 'display-name' => 'Resource 1' },
+            { 'id' => 'res2', 'display-name' => 'Resource 2' }
+          ]
+        }.to_json
+        allow(Open3).to receive(:capture3).and_return([list_output, '', instance_double(Process::Status, success?: true)])
+
+        spec = { 'type' => 'filterable_resource', 'compartment_id' => 'ocid1.comp', 'name' => 'Resource 2' }
+        result = adapter.fetch(spec)
+
+        expect(result['id']).to eq('res2')
+        expect(result['display_name']).to eq('Resource 2')
+      end
+    end
   end
 end

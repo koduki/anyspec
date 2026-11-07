@@ -243,6 +243,101 @@ RSpec.describe Anyspec::ExternalAdapterLoader do
       end
     end
 
+    context 'with YAML safe loading' do
+      it 'neutralizes unsafe Ruby object tags to scalar values' do
+        Dir.mktmpdir do |tmpdir|
+          File.write(File.join(tmpdir, 'tagged.yml'), <<~YAML)
+            adapters:
+              - type: tagged_type
+                locators:
+                  - subcommand: !ruby/object:Gem::Installer test
+                    required_fields: [id]
+                    flag_mappings: { id: --id }
+          YAML
+
+          loader = described_class.new(adapters_dir: tmpdir)
+          loader.load_all
+
+          type_info = loader.loaded_types['tagged_type']
+          expect(type_info).not_to be_nil
+          locator = type_info[:definition]['locators'].first
+          expect(locator['subcommand']).to eq('test')
+          expect(locator['subcommand']).to be_a(String)
+        end
+      end
+
+      it 'rejects Date class in YAML and does not load the type' do
+        Dir.mktmpdir do |tmpdir|
+          File.write(File.join(tmpdir, 'date.yml'), <<~YAML)
+            adapters:
+              - type: date_type
+                created: 2024-01-01
+                locators:
+                  - subcommand: test
+                    required_fields: [id]
+                    flag_mappings: { id: --id }
+          YAML
+
+          loader = described_class.new(adapters_dir: tmpdir)
+
+          expect { loader.load_all }.to output(/Warning.*Unsafe YAML class.*Date/).to_stderr
+          expect(loader.loaded_types).to be_empty
+        end
+      end
+
+      it 'loads valid YAML with permitted types only' do
+        Dir.mktmpdir do |tmpdir|
+          File.write(File.join(tmpdir, 'valid.yml'), <<~YAML)
+            schema_version: "1.0"
+            adapters:
+              - type: valid_type
+                enabled: true
+                count: 42
+                tags:
+                  - production
+                  - secure
+                locators:
+                  - subcommand: test get
+                    required_fields: [id]
+                    flag_mappings: { id: --id }
+          YAML
+
+          loader = described_class.new(adapters_dir: tmpdir)
+          loader.load_all
+
+          type_info = loader.loaded_types['valid_type']
+          expect(type_info[:definition]['enabled']).to be true
+          expect(type_info[:definition]['count']).to eq(42)
+          expect(type_info[:definition]['tags']).to eq(['production', 'secure'])
+        end
+      end
+
+      it 'supports multi-document YAML files safely' do
+        Dir.mktmpdir do |tmpdir|
+          File.write(File.join(tmpdir, 'multi_doc.yml'), <<~YAML)
+            adapters:
+              - type: doc1_type
+                locators:
+                  - subcommand: doc1 get
+                    required_fields: [id]
+                    flag_mappings: { id: --id }
+            ---
+            adapters:
+              - type: doc2_type
+                locators:
+                  - subcommand: doc2 get
+                    required_fields: [id]
+                    flag_mappings: { id: --id }
+          YAML
+
+          loader = described_class.new(adapters_dir: tmpdir)
+          types = loader.load_all
+
+          expect(types.keys).to contain_exactly('doc1_type', 'doc2_type')
+        end
+      end
+    end
+
     context 'with missing directories' do
       it 'ignores non-existent directories without error' do
         loader = described_class.new(adapters_dir: '/nonexistent/path/12345')

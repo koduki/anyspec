@@ -91,12 +91,9 @@ module Anyspec
     def load_definition_file(file_path)
       content = File.read(file_path)
 
-      documents = []
-      YAML.parse_stream(content) do |doc|
-        documents << doc.to_ruby
-      end
+      documents = safe_load_yaml_documents(content, file_path)
 
-      documents.flatten.compact.each do |data|
+      documents.each do |data|
         next unless data.is_a?(Hash)
 
         if data['adapters'].is_a?(Array)
@@ -109,8 +106,28 @@ module Anyspec
       AdapterRegistry.loaded_definition_files << file_path unless AdapterRegistry.loaded_definition_files.include?(file_path)
     rescue Psych::SyntaxError => e
       warn "Warning: Failed to parse adapter definition #{file_path}: #{e.message}"
+    rescue Psych::DisallowedClass => e
+      warn "Warning: Unsafe YAML class in #{file_path}: #{e.message}"
     rescue Anyspec::Error => e
       warn "Warning: Invalid adapter definition #{file_path}: #{e.message}"
+    end
+
+    def safe_load_yaml_documents(content, file_path)
+      documents = []
+
+      content.split(/^---\s*$/).each do |doc_content|
+        next if doc_content.strip.empty?
+
+        data = YAML.safe_load(
+          doc_content,
+          permitted_classes: SAFE_YAML_CLASSES,
+          permitted_symbols: [],
+          aliases: false
+        )
+        documents << data if data
+      end
+
+      documents
     end
 
     def load_multi_adapter_document(data, file_path)
