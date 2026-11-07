@@ -341,7 +341,8 @@ module Anyspec
         hint = ''
         if result.fail? && result.mismatches&.any?
           first_mismatch = result.mismatches.first
-          hint = " - #{first_mismatch[:path]}: expected '#{first_mismatch[:expected]}', got '#{first_mismatch[:actual]}'"
+          actual = first_mismatch[:missing] ? '<missing>' : "'#{first_mismatch[:actual]}'"
+          hint = " - #{first_mismatch[:path]}: expected '#{first_mismatch[:expected]}', got #{actual}"
           hint = hint[0, 80] + '...' if hint.length > 83
         elsif result.error?
           hint = " - #{result.message}"

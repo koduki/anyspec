@@ -60,4 +60,12 @@ RSpec.describe 'OCI responses through a real subprocess' do
         .to eq([{ 'id' => 'mfa', 'sms-enabled' => true }])
     end
   end
+
+  it 'rejects an incomplete singleton list response' do
+    response = { 'data' => { 'resources' => [{ 'id' => 'mfa' }] }, 'opc-total-items' => '2' }
+    with_oci_output(response) do |runner|
+      expect { runner.run_source("oci_domain_singleton 'https://example.test' 'authentication-factor-settings'") }
+        .to raise_error(Anyspec::DSL::RuntimeError, /Count mismatch/)
+    end
+  end
 end

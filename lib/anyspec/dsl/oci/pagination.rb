@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'json'
+require 'set'
+
 module Anyspec
   module DSL
     module OCI
@@ -103,10 +106,18 @@ module Anyspec
             raise PaginationError.new('SCIM response body must be an object', location)
           end
           resources = data['Resources'] || data['resources']
-          return resources if resources.is_a?(Array)
-          return [data] if data.key?('id')
+          expected_total = parse_total(response.is_a?(Hash) ? response['opc-total-items'] : nil,
+                                       data['totalResults'] || data['total-results'], location)
+          resources = [data] if resources.nil? && data.key?('id')
+          resources = [] if resources.nil? && expected_total == 0
+          unless resources.is_a?(Array)
+            raise PaginationError.new('SCIM response has no Resources array', location)
+          end
+          if expected_total && resources.length != expected_total
+            raise PaginationError.new("Count mismatch: got #{resources.length}, expected #{expected_total}", location)
+          end
 
-          raise PaginationError.new('SCIM response has no Resources array', location)
+          resources
         end
 
         def scim_all(base_cmd, location:)
