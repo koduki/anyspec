@@ -202,19 +202,27 @@ module Anyspec
           unless evaluate_operator(expected, actual)
             mismatches << { path: path.join('.'), expected: expected, actual: actual }
           end
+        elsif !actual.is_a?(Hash)
+          mismatches << { path: path.join('.'), expected: expected, actual: actual }
         else
           expected.each do |key, exp_value|
             current_path = path + [key]
-            act_value = actual.is_a?(Hash) ? actual[key] : nil
-            compare_recursive(exp_value, act_value, current_path, mismatches)
+            if actual.key?(key)
+              compare_recursive(exp_value, actual[key], current_path, mismatches)
+            else
+              mismatches << { path: current_path.join('.'), expected: exp_value, actual: nil, missing: true }
+            end
           end
         end
       when Array
         if actual.is_a?(Array)
           expected.each_with_index do |exp_item, idx|
             current_path = path + [idx]
-            act_item = actual[idx]
-            compare_recursive(exp_item, act_item, current_path, mismatches)
+            if idx < actual.length
+              compare_recursive(exp_item, actual[idx], current_path, mismatches)
+            else
+              mismatches << { path: current_path.join('.'), expected: exp_item, actual: nil, missing: true }
+            end
           end
         else
           mismatches << { path: path.join('.'), expected: expected, actual: actual }
@@ -264,6 +272,8 @@ module Anyspec
 
       case expected
       when Hash
+        return actual if comparison_operator?(expected)
+
         expected.keys.each_with_object({}) do |key, filtered|
           filtered[key] = actual.is_a?(Hash) ? filter_actual(actual[key], expected[key]) : nil
         end
@@ -274,7 +284,8 @@ module Anyspec
 
     def format_mismatches(mismatches)
       mismatches.map do |m|
-        "#{m[:path]}: expected '#{m[:expected]}', got '#{m[:actual]}'"
+        actual = m[:missing] ? '<missing>' : "'#{m[:actual]}'"
+        "#{m[:path]}: expected '#{m[:expected]}', got #{actual}"
       end.join('; ')
     end
   end

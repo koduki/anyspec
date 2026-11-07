@@ -28,6 +28,27 @@ RSpec.describe Anyspec::Adapters::GenericCli do
   end
 
   describe '#fetch' do
+    it 'preserves false values when extracting nested fields' do
+      definition = { 'type' => 'flag_test', 'locators' => [
+        { 'subcommand' => 'test service get', 'extract_fields' => ['enabled', 'nested.enabled'] }
+      ] }
+      Anyspec::AdapterRegistry.register_external_definition('flag_test', definition, source_file: '/test')
+      response = { 'data' => { 'enabled' => false, 'nested' => { 'enabled' => false } } }.to_json
+      allow(Open3).to receive(:capture3).and_return([response, '', instance_double(Process::Status, success?: true)])
+
+      expect(adapter.fetch('type' => 'flag_test')).to eq('enabled' => false, 'nested.enabled' => false)
+    end
+
+    it 'filters list results by a false field value' do
+      locator = { 'subcommand' => 'test service list', 'list_filter_field' => 'enabled',
+                  'list_filter_spec_field' => 'enabled' }
+      Anyspec::AdapterRegistry.register_external_definition('flag_test',
+        { 'type' => 'flag_test', 'locators' => [locator] }, source_file: '/test')
+      response = { 'data' => [{ 'id' => 'a', 'enabled' => true }, { 'id' => 'b', 'enabled' => false }] }.to_json
+      allow(Open3).to receive(:capture3).and_return([response, '', instance_double(Process::Status, success?: true)])
+      expect(adapter.fetch('type' => 'flag_test', 'enabled' => false)['id']).to eq('b')
+    end
+
     context 'with a registered external definition' do
       let(:definition) do
         {

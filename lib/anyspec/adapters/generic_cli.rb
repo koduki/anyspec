@@ -75,7 +75,7 @@ module Anyspec
         filter_field = locator['list_filter_field']
         filter_spec_field = locator['list_filter_spec_field']
 
-        if filter_field && filter_spec_field && spec[filter_spec_field]
+        if filter_field && filter_spec_field && spec.key?(filter_spec_field) && !spec[filter_spec_field].nil?
           expected_value = spec[filter_spec_field]
 
           if items.empty?
@@ -83,7 +83,7 @@ module Anyspec
           end
 
           found = items.find do |item|
-            actual = item[filter_field] || item[kebab_to_snake(filter_field.to_s)]
+            actual = item.key?(filter_field) ? item[filter_field] : item[kebab_to_snake(filter_field.to_s)]
             actual == expected_value
           end
 
@@ -120,7 +120,7 @@ module Anyspec
         parts.each do |part|
           return nil unless result.is_a?(Hash)
 
-          result = result[part] || result[part.to_sym]
+          result = result.key?(part) ? result[part] : result[part.to_sym]
         end
 
         result

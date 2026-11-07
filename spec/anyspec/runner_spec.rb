@@ -531,4 +531,41 @@ RSpec.describe Anyspec::Runner do
       end
     end
   end
+
+  describe 'missing values and types' do
+    before do
+      allow(Anyspec::AdapterRegistry).to receive(:get).and_return(
+        Class.new(Anyspec::Adapters::Base) do
+          define_method(:fetch) { |spec| spec['response'] }
+        end
+      )
+    end
+
+    def check(actual, expected)
+      runner.run([{ 'id' => 'x', 'title' => 'x', 'type' => 'test',
+                    'response' => actual, 'expect' => expected }]).first
+    end
+
+    it 'fails missing keys and array items even for null and $ne expectations' do
+      [check({}, { 'status' => { '$ne' => 'DISABLED' } }),
+       check({}, { 'status' => nil }),
+       check({ 'items' => [] }, { 'items' => [nil] })].each do |result|
+        expect(result).to be_fail
+        expect(result.mismatches.first[:missing]).to be(true)
+        expect(result.message).to include('<missing>')
+      end
+    end
+
+    it 'preserves explicit false and null and checks empty object types' do
+      expect(check({ 'enabled' => false, 'value' => nil }, { 'enabled' => false, 'value' => nil })).to be_pass
+      expect(check({ 'nested' => nil }, { 'nested' => {} })).to be_fail
+      expect(check({ 'nested' => {} }, { 'nested' => {} })).to be_pass
+    end
+
+    it 'reports actual scalar values for comparison operators' do
+      result = check({ 'count' => 3 }, { 'count' => { '$gte' => 5 } })
+      expect(result).to be_fail
+      expect(result.actual).to eq('count' => 3)
+    end
+  end
 end
