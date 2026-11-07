@@ -41,5 +41,9 @@ Thumbs.db
 /artifacts/*
 !/artifacts/.gitkeep
 
+# Spinel build outputs
+/build/
+/dist/
+
 # OCI config (never commit)
 .oci/
