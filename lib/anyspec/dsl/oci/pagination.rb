@@ -101,6 +101,52 @@ module Anyspec
           response['Resources'] || response['resources'] || [response].compact
         end
 
+        def scim_all(base_cmd, location:)
+          cmd = base_cmd.dup
+          cmd << '--all' unless cmd.include?('--all')
+
+          response = @executor.execute(cmd, location: location)
+
+          data = response['data'] || response
+          resources = data['Resources'] || data['resources'] || []
+
+          opc_total = response['opc-total-items']
+          total_from_data = data['totalResults'] || data['total-results']
+          expected_total = parse_total(opc_total, total_from_data)
+
+          seen_ids = Set.new
+          resources.each do |resource|
+            id = resource['id']
+            if id && seen_ids.include?(id)
+              raise PaginationError.new("Duplicate resource id: #{id}", location)
+            end
+            seen_ids.add(id) if id
+          end
+
+          if expected_total && resources.length != expected_total
+            raise PaginationError.new(
+              "Count mismatch: got #{resources.length}, expected #{expected_total} (from opc-total-items or total-results)",
+              location
+            )
+          end
+
+          resources
+        end
+
+        private
+
+        def parse_total(opc_total, data_total)
+          if opc_total
+            opc_total.to_s.to_i
+          elsif data_total
+            data_total.to_i
+          else
+            nil
+          end
+        end
+
+        public
+
         def iam_paginate(base_cmd, location:)
           all_items = []
           cmd = base_cmd.dup

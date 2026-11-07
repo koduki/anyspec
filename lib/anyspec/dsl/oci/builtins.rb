@@ -89,7 +89,7 @@ module Anyspec
               cmd << '--attributes' << attributes
             end
 
-            @pagination.scim_paginate(cmd << '--all', location: loc, attributes: nil)
+            @pagination.scim_all(cmd, location: loc)
           end
 
           builtins.register('oci_domain_list_filtered') do |args, interp, loc|
@@ -112,7 +112,7 @@ module Anyspec
               cmd << '--attributes' << attributes
             end
 
-            @pagination.scim_paginate(cmd << '--all', location: loc, attributes: nil)
+            @pagination.scim_all(cmd, location: loc)
           end
 
           builtins.register('oci_domain_get') do |args, interp, loc|
