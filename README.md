@@ -95,7 +95,7 @@ bundle exec ruby -Ilib bin/anyspec check examples/oci-guardrails.yml
 
 ### 配布バイナリ (Spinel)
 
-配布用の単一バイナリは Spinel でビルドします。詳細は [Mac でのビルド](#mac-でのビルド) を参照してください。
+配布用の単一バイナリは Spinel でビルドします。詳細は [Spinel バイナリのビルド](#spinel-バイナリのビルド) を参照してください。
 
 ビルド済みバイナリを使う場合:
 
@@ -589,70 +589,30 @@ spin build
 
 **依存関係**: Xcode Command Line Tools (`xcode-select --install`) が必要です。
 
-### Windows ネイティブバイナリ (.exe)
+### Windows でのビルド
 
-Spinel は Windows ネイティブの `.exe` ビルドをサポートしています。MSYS2 または RubyInstaller Devkit が必要です。
+Windows では WSL (Windows Subsystem for Linux) または Docker Desktop を使用して Linux バイナリをビルドします。
 
-#### 前提条件
+#### WSL を使用
 
-以下のいずれかをインストール:
-- **MSYS2** (推奨): https://www.msys2.org/
-- **RubyInstaller with Devkit**: https://rubyinstaller.org/
-
-MSYS2 UCRT64 シェルで必要なパッケージをインストール:
+WSL2 内で Linux と同様にビルドできます:
 
 ```bash
-pacman -S --needed make diffutils curl tar git mingw-w64-ucrt-x86_64-gcc
-pacman -S --needed mingw-w64-ucrt-x86_64-ruby  # MSYS2 のみ (Devkit は不要)
+# WSL2 内で (Ubuntu など)
+./scripts/build-linux-binary.sh
 ```
 
-#### Spinel のビルド (初回のみ)
+#### Docker Desktop を使用
 
-MSYS2 UCRT64 シェルで:
-
-```bash
-git clone https://github.com/matz/spinel.git
-cd spinel
-make deps && make
-
-# PATH に追加
-export PATH="$PWD/bin:$PATH"
-```
-
-#### anyspec のビルド
-
-MSYS2 UCRT64 シェルで:
-
-```bash
-# SPINEL_SHELL を設定 (spin コマンドに必要)
-export SPINEL_SHELL=/usr/bin/sh
-
-# anyspec ディレクトリへ移動
-cd /path/to/anyspec
-
-# ビルド
-spin build
-```
-
-または、ヘルパースクリプトを使用:
-
-```bash
-./scripts/build-windows-binary.sh
-```
-
-PowerShell から実行する場合:
+Docker Desktop for Windows がインストールされている場合:
 
 ```powershell
-.\scripts\build-windows-binary.ps1
+# PowerShell で
+docker build --target extractor -t anyspec-builder .
+docker run --rm -v ${PWD}/dist:/output anyspec-builder
 ```
 
-ビルドされたバイナリは `build/bin/anyspec.exe` (または `dist/anyspec.exe`) に出力されます。
-
-#### Windows ビルドの注意事項
-
-- **コミュニティメンテナンス**: Spinel の Windows サポートはコミュニティメンテナンスで、master より遅れる可能性があります ([参照](https://github.com/matz/spinel/blob/master/docs/windows.md))
-- **クロスコンパイル不可**: Linux/macOS から Windows バイナリをクロスコンパイルすることはできません。Windows 上でビルドする必要があります
-- **WSL 代替**: WSL (Windows Subsystem for Linux) を使用する場合は、Linux バイナリとしてビルドできます
+ビルドされたバイナリ (`dist/anyspec`) は Linux バイナリです。WSL 内または Linux コンテナ上で実行できます。
 
 ### サポートするターゲットプラットフォーム
 
@@ -662,15 +622,13 @@ PowerShell から実行する場合:
 | Linux ARM64 | Docker (linux/arm64) | `anyspec` | AWS Graviton, Raspberry Pi 64-bit |
 | macOS Intel | macOS 上で直接ビルド | `anyspec` | Xcode CLT 必要 |
 | macOS Apple Silicon | macOS 上で直接ビルド | `anyspec` | Xcode CLT 必要 |
-| Windows x64 | Windows (MSYS2) で直接ビルド | `anyspec.exe` | MSYS2 UCRT64 必要 |
-| Windows (WSL) | WSL 内で Docker または直接ビルド | `anyspec` (Linux) | WSL2 推奨 |
+| Windows | WSL / Docker で Linux バイナリ | `anyspec` | WSL2 または Docker Desktop |
 
 ### 注意事項
 
 - 生成されるバイナリは `oci` CLI を外部依存として呼び出します
 - `oci` CLI はバイナリに同梱**されません**—実行環境に別途インストールが必要です
 - CI 環境では `oci` CLI のメジャーバージョンを固定することを推奨します
-- Windows では OCI CLI for Windows を使用: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm
 
 ## CI/CD での利用
 
