@@ -12,12 +12,13 @@ module Anyspec
     end
 
     class Token
-      attr_reader :type, :value, :location
+      attr_reader :type, :value, :location, :preceded_by_space
 
-      def initialize(type:, value:, location:)
+      def initialize(type:, value:, location:, preceded_by_space: false)
         @type = type
         @value = value
         @location = location
+        @preceded_by_space = preceded_by_space
       end
 
       def to_s
@@ -69,11 +70,25 @@ module Anyspec
       end
 
       def tokenize
+        preceded_by_space = false
         while @pos < @source.length
           token = next_token
-          @tokens << token if token && token.type != :WHITESPACE
+          if token
+            if token.type == :WHITESPACE
+              preceded_by_space = true
+            else
+              token = Token.new(
+                type: token.type,
+                value: token.value,
+                location: token.location,
+                preceded_by_space: preceded_by_space
+              )
+              @tokens << token
+              preceded_by_space = (token.type == :NEWLINE)
+            end
+          end
         end
-        @tokens << Token.new(type: :EOF, value: nil, location: current_location)
+        @tokens << Token.new(type: :EOF, value: nil, location: current_location, preceded_by_space: preceded_by_space)
         @tokens
       end
 

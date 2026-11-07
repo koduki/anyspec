@@ -171,6 +171,34 @@ RSpec.describe Anyspec::DSL::Builtins do
         result = run('$a = [1, 2]' + "\n" + '$b = [3, 4]' + "\n" + 'concat $a $b')
         expect(result).to eq([1, 2, 3, 4])
       end
+
+      it 'concatenates variable with single-element array literal (space separated)' do
+        result = run(<<~DSL)
+          $arr = ["a", "b"]
+          $item = "c"
+          concat $arr [$item]
+        DSL
+        expect(result).to eq(['a', 'b', 'c'])
+      end
+
+      it 'handles empty array literal as second argument' do
+        result = run(<<~DSL)
+          $arr = [1, 2]
+          concat $arr []
+        DSL
+        expect(result).to eq([1, 2])
+      end
+
+      it 'works with multiple single-element array concatenations' do
+        result = run(<<~DSL)
+          $base = []
+          $x = "a"
+          $y = "b"
+          $step1 = concat $base [$x]
+          concat $step1 [$y]
+        DSL
+        expect(result).to eq(['a', 'b'])
+      end
     end
 
     describe 'compact' do

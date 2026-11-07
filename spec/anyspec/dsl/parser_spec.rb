@@ -204,6 +204,71 @@ RSpec.describe Anyspec::DSL::Parser do
     end
   end
 
+  describe 'array literal vs index access distinction' do
+    it 'parses $arr [$item] (with space) as two arguments' do
+      program = parse('concat $arr [$item]')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Command)
+      expect(stmt.name).to eq('concat')
+      expect(stmt.arguments.length).to eq(2)
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::VariableRef)
+      expect(stmt.arguments[0].name).to eq('arr')
+      expect(stmt.arguments[1]).to be_a(Anyspec::DSL::AST::ArrayLiteral)
+      expect(stmt.arguments[1].elements.length).to eq(1)
+    end
+
+    it 'parses $arr[$item] (no space) as index access' do
+      program = parse('echo $arr[$item]')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Command)
+      expect(stmt.arguments.length).to eq(1)
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::IndexAccess)
+      expect(stmt.arguments[0].object).to be_a(Anyspec::DSL::AST::VariableRef)
+      expect(stmt.arguments[0].object.name).to eq('arr')
+      expect(stmt.arguments[0].index).to be_a(Anyspec::DSL::AST::VariableRef)
+      expect(stmt.arguments[0].index.name).to eq('item')
+    end
+
+    it 'parses $arr["key"] (no space) as index access with string key' do
+      program = parse('echo $domain["display-name"]')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(1)
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::IndexAccess)
+      expect(stmt.arguments[0].index).to be_a(Anyspec::DSL::AST::StringLiteral)
+      expect(stmt.arguments[0].index.value).to eq('display-name')
+    end
+
+    it 'parses $arr [] (with space) as two arguments (empty array)' do
+      program = parse('default $arr []')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(2)
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::VariableRef)
+      expect(stmt.arguments[1]).to be_a(Anyspec::DSL::AST::ArrayLiteral)
+      expect(stmt.arguments[1].elements).to be_empty
+    end
+
+    it 'parses multiple $arr [$x] patterns in one command' do
+      program = parse('merge $a [$x] $b [$y]')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(4)
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::VariableRef)
+      expect(stmt.arguments[1]).to be_a(Anyspec::DSL::AST::ArrayLiteral)
+      expect(stmt.arguments[2]).to be_a(Anyspec::DSL::AST::VariableRef)
+      expect(stmt.arguments[3]).to be_a(Anyspec::DSL::AST::ArrayLiteral)
+    end
+
+    it 'parses chained index access without space' do
+      program = parse('echo $data[0]["name"]')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(1)
+      access = stmt.arguments[0]
+      expect(access).to be_a(Anyspec::DSL::AST::IndexAccess)
+      expect(access.index).to be_a(Anyspec::DSL::AST::StringLiteral)
+      expect(access.object).to be_a(Anyspec::DSL::AST::IndexAccess)
+      expect(access.object.index).to be_a(Anyspec::DSL::AST::NumberLiteral)
+    end
+  end
+
   describe 'booleans and null as command arguments' do
     it 'parses true as command argument' do
       program = parse('assert true "message"')

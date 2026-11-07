@@ -276,7 +276,7 @@ module Anyspec
         var_token = consume(:VARIABLE)
         expr = AST::VariableRef.new(name: var_token.value[1..], location: var_token.location)
 
-        while check(:DOT) || (check(:LBRACKET) && !empty_array_ahead?)
+        while check(:DOT) || bracket_index_access?
           if check(:DOT)
             advance
             field_token = consume(:IDENTIFIER)
@@ -300,8 +300,10 @@ module Anyspec
         expr
       end
 
-      def empty_array_ahead?
-        check(:LBRACKET) && peek_next&.type == :RBRACKET
+      def bracket_index_access?
+        return false unless check(:LBRACKET)
+        return false if current.preceded_by_space
+        true
       end
 
       def parse_single_string
