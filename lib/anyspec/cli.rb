@@ -356,7 +356,7 @@ module Anyspec
       when 1
         puts "Result: FAILED (drift detected)"
       when 2
-        puts "Result: ERROR (fetch/config error, no drift)"
+        puts "Result: ERROR (fetch/config error; drift may also be present)"
       end
     end
 
@@ -402,7 +402,7 @@ module Anyspec
           --adapters-dir DIR  Directory with external adapter definitions (canonical source)
                               Multiple directories via platform path separator (: on Unix, ; on Windows)
           --fail-on MODE      When to exit non-zero (default: both fail and error exit non-zero)
-                              fail:  Exit 1 on drift, exit 2 on errors only
+                              fail:  Exit 1 on drift, exit 2 when any error occurs
                               error: Exit 2 on errors only (drift exits 0)
                               never: Always exit 0 (still writes reports and outputs)
           -h, --help          Show this help

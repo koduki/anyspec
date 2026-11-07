@@ -221,7 +221,7 @@ RSpec.describe Anyspec::Runner do
     end
 
     context 'when there are both fails and errors' do
-      it 'returns 1 (fail takes precedence)' do
+      it 'returns 2 (error takes precedence)' do
         call_count = 0
         allow(Anyspec::AdapterRegistry).to receive(:get).and_return(
           Class.new(Anyspec::Adapters::Base) do
@@ -242,7 +242,7 @@ RSpec.describe Anyspec::Runner do
         ]
 
         runner.run(specs)
-        expect(runner.exit_code).to eq(1)
+        expect(runner.exit_code).to eq(2)
       end
     end
   end

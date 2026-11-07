@@ -157,6 +157,30 @@ RSpec.describe Anyspec::CLI do
       end
     end
 
+    it 'returns an error when drift and fetch errors coexist with --fail-on error' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'spec.yml')
+        File.write(path, <<~YAML)
+          - id: drift
+            title: Drift
+            cloud: oci
+            type: audit_configuration
+            compartment_id: tenant
+            expect: {retention_period_days: 1}
+          - id: error
+            title: Error
+            cloud: oci
+            type: unknown_adapter
+            expect: {status: ENABLED}
+        YAML
+        cli = described_class.new(['check', path, '--oci-cli', FAKE_OCI_CLI,
+                                   '--fail-on', 'error', '--out-dir', dir])
+        result = nil
+        expect { result = cli.run }.to output(/\[FAIL\].*\[ERROR\]/m).to_stdout
+        expect(result).to eq(2)
+      end
+    end
+
     it 'rejects unknown and missing options after positional arguments' do
       [['validate', 'unused.yml', '--unknown'], ['check', 'unused.yml', '--profile']].each do |argv|
         result = nil

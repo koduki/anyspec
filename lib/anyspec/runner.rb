@@ -30,8 +30,8 @@ module Anyspec
     end
 
     def exit_code
-      return 1 if @results.any?(&:fail?)
       return 2 if @results.any?(&:error?)
+      return 1 if @results.any?(&:fail?)
 
       0
     end
