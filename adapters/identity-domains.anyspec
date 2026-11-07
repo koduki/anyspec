@@ -1,0 +1,107 @@
+# anyspec DSL v1. All remote operations go through the configured OCI executable.
+# Both IAM and SCIM raw GET responses preserve API key spelling.
+normalization = value {"drop":["$ref","meta","dateAdded"],"arrays":{"**.schemas":"$","**.rules":"sequence","**.members":"value","**.conditions":"value","**.ipAddresses":"value","**.identityProviders":"value","**.trustPolicies":"value","**.return":"name"}}
+reference_rules = value [
+  {"path":"Policies.*.rules.*.value","collection":"Rules"},
+  {"path":"Rules.*.conditionGroup","id_path":"value","types":{"Condition":"Conditions","ConditionGroup":"ConditionGroups"}},
+  {"path":"ConditionGroups.*.conditions.*","id_path":"value","types":{"Condition":"Conditions","ConditionGroup":"ConditionGroups"}},
+  {"path":"Apps.*.signonPolicy.value","collection":"Policies"},
+  {"path":"Apps.*.idpPolicy.value","collection":"Policies"},
+  {"path":"Apps.*.identityProviders.*.value","collection":"IdentityProviders"},
+  {"path":"Apps.*.trustPolicies.*.value","collection":"Policies"},
+  {"path":"Grants.*.grantee","id_path":"value","types":{"User":"Users","Group":"Groups","App":"Apps"}},
+  {"path":"Grants.*.entitlement.attributeValue","collection":"AppRoles"},
+  {"path":"Grants.*.app.value","collection":"Apps"},
+  {"path":"AppRoles.*.app.value","collection":"Apps"}
+]
+compartment_query = object compartmentId $input.tenancy_id compartmentIdInSubtree true accessLevel ANY
+compartments = iam-list $input.iam_endpoint compartments $compartment_query | where-not-in lifecycleState ["DELETED"] | pluck id
+root = array $input.tenancy_id
+compartments = value $compartments | union $root
+value 1 | emit schema_version
+value $input.tenancy_id | emit tenancy_id
+value {} | emit domains
+for compartment in value $compartments do
+  domain_query = object compartmentId $compartment
+  domains = iam-list $input.iam_endpoint domains $domain_query
+  for domain in value $domains do
+    context $domain.id
+    value $domain | normalize $normalization | emit domains $domain.id attributes
+  end
+  inactive = value $domains | where-not-in lifecycleState ["ACTIVE"]
+  for domain in value $inactive do
+    context $domain.id
+    warn DOMAIN_NOT_ACTIVE $domain.lifecycleState
+    value false | emit domains $domain.id collected
+  end
+  active = value $domains | where lifecycleState ACTIVE
+  for domain in value $active do
+    context $domain.id
+    endpoint = value $domain | get url
+    collections = value {}
+    for kind in value ["Policies","Rules","ConditionGroups","Conditions","NetworkPerimeters","IdentityProviders","PasswordPolicies","AuthenticationFactorSettings","SsoSettings","KmsiSettings","Apps"] do
+      rows = scim-list $endpoint $kind | index id
+      collections = value $collections | put $kind $rows
+    end
+    admin_filter = scim-eq adminRole true
+    roles = scim-list $endpoint AppRoles $admin_filter
+    role_map = value $roles | index id
+    collections = value $collections | put AppRoles $role_map
+    grants = value []
+    for role in value $roles do
+      entitlement_kind = scim-eq entitlement.attributeName appRoles
+      entitlement_id = scim-eq entitlement.attributeValue $role.id
+      grant_filter = scim-and $entitlement_kind $entitlement_id
+      role_grants = scim-list $endpoint Grants $grant_filter
+      grants = value $grants | union $role_grants
+    end
+    grant_map = value $grants | index id
+    collections = value $collections | put Grants $grant_map
+    collections = value $collections | decode-at Conditions.*.attributeValue | decode-at Rules.*.return.*.value
+    references = value $collections | references $reference_rules
+    # Typed URI references also cover schema extensions and policy return values.
+    links = value $collections | links ["Users","Groups","IdentityProviders","Policies","Rules","Conditions","ConditionGroups","NetworkPerimeters"] ["meta","idcsCreatedBy","idcsLastModifiedBy"]
+    references = value $references | union $links
+    conditions = value $collections.Conditions | values | decode-field attributeValue
+    group_condition_ids = value $conditions | where attributeName 'user.groups[*].value' | pluck attributeValue | flatten | unique
+    user_condition_ids = value $conditions | where attributeName user.id | pluck attributeValue | flatten | unique
+    user_names = value $conditions | where attributeName user.userName | pluck attributeValue | flatten | unique
+    # Never guess the semantics of an unrecognized user/group condition.
+    unknown = value $conditions | where-not-in attributeName ["user.groups[*].value","user.id","user.userName","subject.ip","user.urn:ietf:params:scim:schemas:oracle:idcs:extension:user:User:appRoles[*].adminRole"]
+    for condition in value $unknown do
+      warn UNINTERPRETED_CONDITION $condition.id
+    end
+    perimeter_ids = value $conditions | pluck attributeValue | scan '#inIPRange\(\s*"([^"\\]+)"\s*\)'
+    value $perimeter_ids | warn-missing $collections.NetworkPerimeters NetworkPerimeters
+    admin_group_filter = scim-eq displayName Administrators
+    admin_groups = scim-list $endpoint Groups $admin_group_filter | warn-empty ADMINISTRATORS_GROUP_NOT_FOUND Administrators | pluck id
+    group_ids = value $references | reference-ids Groups | union $group_condition_ids $admin_groups
+    groups = scim-groups $endpoint $group_ids
+    group_map = value $groups | index id
+    collections = value $collections | put Groups $group_map
+    value $group_condition_ids | warn-missing $group_map Groups
+    member_ids = value $groups | collect '*.members.*' | where type User | pluck value
+    user_ids = value $references | reference-ids Users | union $user_condition_ids $member_ids
+    for user_name in value $user_names do
+      user_filter = scim-eq userName $user_name
+      named_users = scim-list $endpoint Users $user_filter | warn-empty MISSING_USER_NAME $user_name | pluck id
+      user_ids = value $user_ids | union $named_users
+    end
+    users = value []
+    for user_id in value $user_ids do
+      user = scim-get? $endpoint Users $user_id
+      one_user = array $user | compact
+      users = value $users | union $one_user
+    end
+    user_map = value $users | index id
+    collections = value $collections | put Users $user_map
+    value $references | check-references $collections
+    for policy in value $collections.Policies | values do
+      rules = value $policy | get? rules
+      rules = array $rules | compact | flatten
+      value $rules | warn-duplicates sequence $policy.id
+    end
+    value $collections | normalize $normalization | emit domains $domain.id collections
+    value true | emit domains $domain.id collected
+  end
+end

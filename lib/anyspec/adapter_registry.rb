@@ -55,7 +55,7 @@ module Anyspec
 
         register(
           type_str,
-          Adapters::GenericCli,
+          definition['dsl'] ? Adapters::Dsl : Adapters::GenericCli,
           priority: :external,
           source_file: source_file,
           definition: definition

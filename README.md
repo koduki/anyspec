@@ -75,6 +75,19 @@ anyspec バイナリは `oci` CLI を外部依存として呼び出します。`
 
 これら以外のリソースタイプは、外部 YAML 定義で追加するか、Ruby で実装してリビルドします。
 
+## データ収集DSL
+
+複数APIの収集・集合演算・参照検証には、Bash風パイプラインのanyspec DSLを利用できます。
+既存YAMLアダプタと共存し、OCI Identity Domains向けの定義を`adapters/`に同梱しています。
+
+```bash
+bundle exec ruby -Ilib bin/anyspec validate-dsl adapters/identity-domains.anyspec
+bundle exec ruby -Ilib bin/anyspec --profile PRODUCTION collect adapters/identity-domains.anyspec inputs.json
+```
+
+`inputs.json`には`tenancy_id`と`iam_endpoint`を指定します（例: `https://identity.ap-tokyo-1.oci.oraclecloud.com`）。
+[設計・文法・実行手順](docs/adapter-dsl.md)と[OCI公式仕様の調査結果](docs/oci-identity-domains-research.md)を参照してください。
+
 ## インストール
 
 ### 開発環境 (CRuby)

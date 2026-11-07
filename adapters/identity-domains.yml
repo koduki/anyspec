@@ -1,0 +1,6 @@
+schema_version: '1.0'
+type: identity_domains_snapshot
+dsl: identity-domains.anyspec
+inputs:
+  - tenancy_id
+  - iam_endpoint

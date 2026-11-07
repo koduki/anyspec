@@ -17,12 +17,17 @@ RSpec.describe Anyspec::Adapters::GenericCli do
 
   let(:adapter) { described_class.new(config) }
 
-  before do
-    Anyspec::AdapterRegistry.reset!
-  end
-
-  after do
-    Anyspec::AdapterRegistry.reset!
+  around do |example|
+    registry = Anyspec::AdapterRegistry
+    saved = %i[registry external_definitions loaded_definition_files overridden_builtins].to_h do |name|
+      [name, registry.public_send(name).dup]
+    end
+    registry.reset!
+    example.run
+  ensure
+    saved.each do |name, value|
+      registry.instance_variable_set("@#{name}", value)
+    end
   end
 
   describe '#fetch' do

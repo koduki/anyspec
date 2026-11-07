@@ -26,6 +26,7 @@ module Anyspec
     def run
       parse_options!
       return 1 if @options[:parse_error]
+      return 0 if @options[:info]
 
       command = @argv.shift
 
@@ -34,6 +35,10 @@ module Anyspec
         run_check
       when 'validate'
         run_validate
+      when 'collect'
+        run_collect
+      when 'validate-dsl'
+        run_validate_dsl
       when 'version', '-v', '--version'
         puts "anyspec #{Anyspec::VERSION}"
         0
@@ -56,6 +61,8 @@ module Anyspec
         opts.separator "Commands:"
         opts.separator "  check <spec.yml|dir>     Run checks against OCI resources"
         opts.separator "  validate <spec.yml|dir>  Validate spec files offline (no OCI access)"
+        opts.separator "  collect <script> <inputs.json>  Collect a DSL snapshot as JSON on stdout"
+        opts.separator "  validate-dsl <script>    Validate DSL syntax and commands offline"
         opts.separator "  version                  Show version"
         opts.separator "  help                     Show this help"
         opts.separator ""
@@ -94,12 +101,12 @@ module Anyspec
 
         opts.on('-h', '--help', 'Show this help') do
           puts opts
-          exit 0
+          @options[:info] = true
         end
 
         opts.on('-v', '--version', 'Show version') do
           puts "anyspec #{Anyspec::VERSION}"
-          exit 0
+          @options[:info] = true
         end
       end
 
@@ -107,6 +114,35 @@ module Anyspec
     rescue OptionParser::InvalidArgument => e
       $stderr.puts "Error: #{e.message}"
       @options[:parse_error] = true
+    end
+
+    def run_validate_dsl
+      path = @argv.shift
+      raise Anyspec::Error, 'DSL script required' unless path
+      nodes = DSL::Parser.new(File.read(path), file: path).parse
+      DSL::Runtime.new.validate(nodes, file: path)
+      puts "DSL valid: #{path}"
+      0
+    rescue Anyspec::Error, SystemCallError => e
+      $stderr.puts "Error: #{e.message}"
+      2
+    end
+
+    def run_collect
+      path, inputs_path = @argv.shift(2)
+      raise Anyspec::Error, 'DSL script and JSON input file required' unless path && inputs_path
+      inputs = JSON.parse(File.read(inputs_path))
+      raise Anyspec::Error, 'DSL inputs must be a JSON object' unless inputs.is_a?(Hash)
+      config = Config.new(profile: @options[:profile], config_path: @options[:config_path],
+                          auth_mode: @options[:auth_mode], oci_cli: @options[:oci_cli])
+      runtime = DSL::Runtime.new(transport: DSL::OCI.new(config))
+      snapshot = runtime.run(File.read(path), variables: { 'input' => inputs }, file: path)
+      runtime.warnings.each { |w| $stderr.puts "Warning [#{w['code']}] #{w['context']}: #{w['message']}" }
+      puts JSON.pretty_generate(snapshot)
+      0
+    rescue Anyspec::Error, SystemCallError, JSON::ParserError => e
+      $stderr.puts "Error: #{e.message}"
+      2
     end
 
     def run_check
@@ -319,6 +355,8 @@ module Anyspec
         Commands:
           check <spec.yml|dir>     Run checks against OCI resources
           validate <spec.yml|dir>  Validate spec files offline (no OCI access required)
+          collect <script> <inputs.json>  Collect a DSL snapshot as JSON on stdout
+          validate-dsl <script>    Validate DSL syntax and commands offline
           version                  Show version
           help                     Show this help
 

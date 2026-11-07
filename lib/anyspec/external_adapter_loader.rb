@@ -104,6 +104,8 @@ module Anyspec
       end
 
       AdapterRegistry.loaded_definition_files << file_path unless AdapterRegistry.loaded_definition_files.include?(file_path)
+    rescue Errno::ENOENT, Errno::EACCES => e
+      warn "Warning: Failed to read adapter definition #{file_path}: #{e.message}"
     rescue Psych::SyntaxError => e
       warn "Warning: Failed to parse adapter definition #{file_path}: #{e.message}"
     rescue Psych::DisallowedClass => e
@@ -190,6 +192,20 @@ module Anyspec
     def validate_adapter_definition!(data, file_path)
       unless data['type'].is_a?(String) && !data['type'].empty?
         raise Anyspec::Error, "Missing or invalid 'type' field"
+      end
+
+      if data['dsl']
+        unless data['dsl'].is_a?(String) && data['inputs'].is_a?(Array) && data['inputs'].all? { |key| key.is_a?(String) }
+          raise Anyspec::Error, 'DSL definition requires a script path and inputs array'
+        end
+        source_path = File.realpath(File.expand_path(data['dsl'], File.dirname(file_path)))
+        root = File.realpath(File.dirname(file_path)) + File::SEPARATOR
+        raise Anyspec::Error, 'DSL script must reside within its definition directory' unless source_path.start_with?(root)
+        source = File.read(source_path)
+        nodes = DSL::Parser.new(source, file: source_path).parse
+        DSL::Runtime.new.validate(nodes, file: source_path)
+        data['_source'], data['_file'] = source, source_path
+        return
       end
 
       locators = data['locators']

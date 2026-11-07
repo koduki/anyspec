@@ -12,6 +12,7 @@ module Anyspec
     end
 
     def run(specs)
+      @dsl_adapters = {}
       @results = specs.map { |spec| check_spec(spec) }
       @results
     end
@@ -50,7 +51,11 @@ module Anyspec
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       adapter_class = AdapterRegistry.get(spec['type'])
-      adapter = adapter_class.new(@config)
+      adapter = if adapter_class == Adapters::Dsl
+                  @dsl_adapters[spec['type']] ||= adapter_class.new(@config)
+                else
+                  adapter_class.new(@config)
+                end
 
       actual = adapter.fetch(spec)
       expected = spec['expect']

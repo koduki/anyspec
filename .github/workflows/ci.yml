@@ -38,3 +38,6 @@ jobs:
         env:
           OCI_TENANCY_OCID: ocid1.tenancy.oc1..test
           OCI_NAMESPACE: test-namespace
+
+      - name: Validate bundled Identity Domains DSL (offline)
+        run: bundle exec ruby -Ilib bin/anyspec validate-dsl adapters/identity-domains.anyspec
