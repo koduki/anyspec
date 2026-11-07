@@ -437,6 +437,10 @@ module Anyspec
           nil
         end
 
+        register('warnings') do |_args, interp, _loc|
+          interp.warnings.map(&:dup)
+        end
+
         register('assert') do |args, interp, loc|
           condition, message = args
           unless condition

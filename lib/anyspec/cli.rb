@@ -18,6 +18,7 @@ module Anyspec
         auth_mode: nil,
         fail_on: nil,
         oci_cli: nil,
+        allow_oci_writes: false,
         adapters_dir: ENV['ANYSPEC_ADAPTERS_DIR']
       }
       @external_adapter_info = nil
@@ -26,8 +27,20 @@ module Anyspec
     def run
       parse_options!
       return 1 if @options[:parse_error]
+      return 0 if @options[:displayed_option]
 
       command = @argv.shift
+
+      if @options[:allow_oci_writes] && command != 'run'
+        $stderr.puts 'Error: --allow-oci-writes applies only to DSL run'
+        return 1
+      end
+
+      max_args = %w[check validate run].include?(command) ? 1 : 0
+      if @argv.length > max_args
+        $stderr.puts "Error: unexpected argument(s): #{@argv.drop(max_args).join(' ')}"
+        return 1
+      end
 
       case command
       when 'check'
@@ -91,23 +104,27 @@ module Anyspec
           @options[:oci_cli] = path
         end
 
+        opts.on('--allow-oci-writes', 'Allow non-read-only OCI commands in DSL scripts') do
+          @options[:allow_oci_writes] = true
+        end
+
         opts.on('--adapters-dir DIR', 'Directory with external adapter definitions (multiple via path separator)') do |dir|
           @options[:adapters_dir] = dir
         end
 
         opts.on('-h', '--help', 'Show this help') do
           puts opts
-          exit 0
+          @options[:displayed_option] = true
         end
 
         opts.on('-v', '--version', 'Show version') do
           puts "anyspec #{Anyspec::VERSION}"
-          exit 0
+          @options[:displayed_option] = true
         end
       end
 
-      parser.order!(@argv)
-    rescue OptionParser::InvalidArgument => e
+      parser.permute!(@argv)
+    rescue OptionParser::ParseError => e
       $stderr.puts "Error: #{e.message}"
       @options[:parse_error] = true
     end
@@ -257,7 +274,8 @@ module Anyspec
         profile: @options[:profile],
         config_path: @options[:config_path],
         auth_mode: @options[:auth_mode],
-        oci_cli: @options[:oci_cli]
+        oci_cli: @options[:oci_cli],
+        allow_oci_writes: @options[:allow_oci_writes]
       )
 
       env_vars = {
@@ -323,7 +341,8 @@ module Anyspec
         hint = ''
         if result.fail? && result.mismatches&.any?
           first_mismatch = result.mismatches.first
-          hint = " - #{first_mismatch[:path]}: expected '#{first_mismatch[:expected]}', got '#{first_mismatch[:actual]}'"
+          actual = first_mismatch[:missing] ? '<missing>' : "'#{first_mismatch[:actual]}'"
+          hint = " - #{first_mismatch[:path]}: expected '#{first_mismatch[:expected]}', got #{actual}"
           hint = hint[0, 80] + '...' if hint.length > 83
         elsif result.error?
           hint = " - #{result.message}"
@@ -349,7 +368,7 @@ module Anyspec
       when 1
         puts "Result: FAILED (drift detected)"
       when 2
-        puts "Result: ERROR (fetch/config error, no drift)"
+        puts "Result: ERROR (fetch/config error; drift may also be present)"
       end
     end
 
@@ -392,10 +411,11 @@ module Anyspec
           --config PATH       Path to OCI config file (default: ~/.oci/config)
           --auth-mode MODE    OCI auth: config_file (default), instance_principal, resource_principal
           --oci-cli PATH      Path to OCI CLI executable (default: oci, or OCI_CLI env var)
+          --allow-oci-writes  Allow non-read-only OCI commands in DSL scripts (run only)
           --adapters-dir DIR  Directory with external adapter definitions (canonical source)
                               Multiple directories via platform path separator (: on Unix, ; on Windows)
           --fail-on MODE      When to exit non-zero (default: both fail and error exit non-zero)
-                              fail:  Exit 1 on drift, exit 2 on errors only
+                              fail:  Exit 1 on drift, exit 2 when any error occurs
                               error: Exit 2 on errors only (drift exits 0)
                               never: Always exit 0 (still writes reports and outputs)
           -h, --help          Show this help

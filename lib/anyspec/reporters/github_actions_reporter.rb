@@ -230,7 +230,8 @@ module Anyspec
 
         if result.mismatches&.any?
           mismatch_details = result.mismatches.map do |m|
-            "#{m[:path]}: expected '#{m[:expected]}', got '#{m[:actual]}'"
+            actual = m[:missing] ? '<missing>' : "'#{m[:actual]}'"
+            "#{m[:path]}: expected '#{m[:expected]}', got #{actual}"
           end.join('; ')
           parts << mismatch_details
         elsif result.message

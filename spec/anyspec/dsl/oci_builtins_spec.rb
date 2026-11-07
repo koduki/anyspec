@@ -36,6 +36,29 @@ RSpec.describe Anyspec::DSL::OCI::OciBuiltins do
 
   let(:runner) { Anyspec::DSL::Runner.create_with_mock_executor(config: config, mock_responses: mock_responses) }
 
+  describe 'oci_group_closure' do
+    it 'traverses nested groups once, detects cycles and collects only user IDs' do
+      executor = instance_double(Anyspec::DSL::OCI::Executor)
+      members = {
+        'g1' => [{ 'type' => 'Group', 'value' => 'g2' }, { 'type' => 'User', 'value' => 'u1' }],
+        'g2' => [{ 'type' => 'Group', 'value' => 'g1' }, { 'type' => 'User', 'value' => 'u2' },
+                 { 'type' => 'App', 'value' => 'a1' }]
+      }
+      requests = []
+      allow(executor).to receive(:execute) do |argv, **_kwargs|
+        group_id = argv[argv.index('--group-id') + 1]
+        requests << argv
+        argv.include?('--attributes') ? { 'id' => group_id, 'members' => members.fetch(group_id) } : { 'id' => group_id }
+      end
+      nested_runner = Anyspec::DSL::Runner.new(config: config, executor: executor)
+      result = nested_runner.run_source("oci_group_closure 'https://example.test' ['g1']")
+      expect(result['groups'].map { |group| group['id'] }).to eq(%w[g1 g2])
+      expect(result['user_ids']).to eq(%w[u1 u2])
+      expect(requests.count { |argv| !argv.include?('--attributes') }).to eq(2)
+      expect(nested_runner.warnings.first[:message]).to include('unsupported member type')
+    end
+  end
+
   describe 'classify_attribute_value' do
     it 'classifies JSON values' do
       result = runner.run_source(<<~DSL)

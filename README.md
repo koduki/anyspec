@@ -162,7 +162,7 @@ Options:
 | 値 | 動作 |
 |---|---|
 | (なし) | デフォルト: fail でも error でも非ゼロ終了 |
-| `fail` | ドリフト検知時のみ非ゼロ (exit 1)。error のみの場合は exit 2 |
+| `fail` | ドリフト検知時は exit 1。error がある場合は exit 2 |
 | `error` | 取得エラー時のみ非ゼロ (exit 2)。ドリフトのみは exit 0 |
 | `never` | 常に exit 0 (レポートと出力は生成) |
 
@@ -170,9 +170,11 @@ Options:
 # ドリフトを記録するが CI を止めない
 bin/anyspec check specs/ --fail-on never
 
-# 取得エラーは無視、ドリフトだけ CI を止める
+# ドリフトまたは取得エラーがある場合に CI を止める
 bin/anyspec check specs/ --fail-on fail
 ```
+
+fail と error が混在する場合は error を優先し、`never` 以外では exit 2 を返します。結果の内訳はレポートで確認できます。
 
 ### ディレクトリ指定
 
@@ -257,6 +259,7 @@ namespace: ${OCI_NAMESPACE}
 ```
 
 **注意**: 型の比較は厳密です。`14` (整数) と `"14"` (文字列) は異なる値として扱われます。
+期待した項目が存在しない場合は、値が明示的な `null` の場合と区別して不一致とします。`$ne` も欠落項目を PASS にはしません。
 
 ### 一時的なウェイバー (until:)
 

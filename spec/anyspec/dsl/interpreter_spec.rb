@@ -80,6 +80,11 @@ RSpec.describe Anyspec::DSL::Interpreter do
     it 'interpolates complex expressions' do
       expect(run('$x = 42' + "\n" + '"value: ${x}"')).to eq('value: 42')
     end
+
+    it 'interpolates object fields without executing arbitrary expressions' do
+      expect(run('$x = {"nested": {"name": "policy"}}' + "\n" + '"${x.nested.name}"')).to eq('policy')
+      expect { run('"${system(id)}"') }.to raise_error(Anyspec::DSL::RuntimeError, /Invalid interpolation/)
+    end
   end
 
   describe 'foreach' do
@@ -111,6 +116,15 @@ RSpec.describe Anyspec::DSL::Interpreter do
         $arr | sort $_
       DSL
       expect(result).to eq([1, 2, 3])
+    end
+
+    it 'passes false and null instead of retaining a prior value' do
+      expect(run("$x = 'stale'\n$x | eq 1 2 | default $_ 'fallback'")).to be(false)
+      expect(run("$x = 'stale'\n$x | first [] | default $_ 'fallback'")).to eq('fallback')
+    end
+
+    it 'passes false through a pipeline inside foreach' do
+      expect(run("foreach x in [1, 2] {\n$x | eq 1 2 | default $_ 'fallback'\n}")).to eq([false, false])
     end
   end
 

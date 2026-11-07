@@ -262,5 +262,77 @@ RSpec.describe Anyspec::DSL::OCI::Pagination do
 
       expect(result.length).to eq(2)
     end
+
+    [0, 999, 1000, 10_000, 10_001].each do |size|
+      it "collects #{size} members across page boundaries" do
+        members = Array.new(size) { |i| { 'value' => "user-#{i}", 'type' => 'User' } }
+        executor = instance_double(Anyspec::DSL::OCI::Executor)
+        allow(executor).to receive(:execute) do |args, **_kwargs|
+          attributes = args[args.index('--attributes') + 1]
+          start = attributes.match(/startIndex=(\d+)/)[1].to_i
+          { 'id' => 'group', 'members' => members.slice(start - 1, 1000) || [] }
+        end
+        result = described_class.new(executor: executor).group_members_paginate(
+          group_id: 'group', endpoint: 'https://test', location: nil
+        )
+        expect(result).to eq(members)
+      end
+    end
+
+    it 'rejects repeated members instead of silently deduplicating pages' do
+      executor = instance_double(Anyspec::DSL::OCI::Executor)
+      repeated = Array.new(1000) { |i| { 'value' => "user-#{i}" } }
+      allow(executor).to receive(:execute).and_return({ 'members' => repeated })
+      expect do
+        described_class.new(executor: executor).group_members_paginate(group_id: 'g', endpoint: 'https://test', location: nil)
+      end.to raise_error(Anyspec::DSL::OCI::PaginationError, /Duplicate group member/)
+    end
+  end
+
+  describe 'raw-request pagination' do
+    let(:executor) { instance_double(Anyspec::DSL::OCI::Executor) }
+    let(:pagination) { described_class.new(executor: executor) }
+
+    def page(ids, total:, start:)
+      { 'status' => '200 OK', 'data' => { 'Resources' => ids.map { |id| { 'id' => id } },
+                                           'totalResults' => total, 'startIndex' => start } }
+    end
+
+    def collect_raw
+      pagination.raw_request_paginate(endpoint: 'https://example.test', path: '/admin/v1/ConditionGroups', location: nil)
+    end
+
+    it 'advances by returned resources even when pages are shorter than requested' do
+      responses = [page(%w[a b], total: 3, start: 1), page(['c'], total: 3, start: 3)]
+      urls = []
+      allow(executor).to receive(:execute) do |args, **_kwargs|
+        urls << args[args.index('--target-uri') + 1]
+        responses.shift
+      end
+      expect(collect_raw.map { |item| item['id'] }).to eq(%w[a b c])
+      expect(urls.last).to include('startIndex=3')
+    end
+
+    it 'rejects incomplete pages, duplicates, changing totals and wrong offsets' do
+      bad_sequences = [
+        [page(['a'], total: 2, start: 1), page([], total: 2, start: 2)],
+        [page(['a'], total: 2, start: 1), page(['a'], total: 2, start: 2)],
+        [page(['a'], total: 2, start: 1), page(['b'], total: 3, start: 2)],
+        [page(['a'], total: 2, start: 1), page(['b'], total: 2, start: 101)]
+      ]
+      bad_sequences.each do |responses|
+        allow(executor).to receive(:execute) { responses.shift }
+        expect { collect_raw }.to raise_error(Anyspec::DSL::OCI::PaginationError)
+      end
+    end
+
+    it 'distinguishes a valid empty result from malformed or excessive responses' do
+      allow(executor).to receive(:execute).and_return({ 'status' => '200 OK', 'data' => { 'totalResults' => 0 } })
+      expect(collect_raw).to eq([])
+      [ { 'status' => '200 OK', 'data' => {} }, page(%w[a b], total: 1, start: 1) ].each do |response|
+        allow(executor).to receive(:execute).and_return(response)
+        expect { collect_raw }.to raise_error(Anyspec::DSL::OCI::PaginationError)
+      end
+    end
   end
 end

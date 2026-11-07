@@ -116,3 +116,7 @@ anyspec run script.flow
 ```
 
 環境変数 `OCI_TENANCY_OCID` でテナンシーOCIDを指定します。
+
+OCI コマンドは既定で `get`、`list` と `raw-request` の GET のみ受け付けます。認証やプロファイルは DSL 内ではなく anyspec のオプションで指定します。別の OCI 操作を明示的に許可する場合だけ `anyspec run script.flow --allow-oci-writes` を使用してください。
+
+この制限は不注意によるクラウド更新を抑えるためのもので、信頼できないスクリプト向けのサンドボックスではありません。DSL は取得先の endpoint や一部の CLI 引数を指定でき、CLI 自体がローカルファイルを操作する場合もあります。信頼できるスクリプトを使用し、OCI IAM にも必要な最小権限を設定してください。外部 YAML アダプターの実行制限はこの DSL 設定の対象外です。

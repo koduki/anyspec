@@ -55,7 +55,9 @@ anyspec run scripts/oci_identity_domains.flow
 
 1. `oci iam compartment list` でテナンシー配下の全コンパートメントを取得
 2. 各コンパートメントで `oci iam domain list` を実行
-3. ACTIVE なドメインのみを対象
+3. 全ドメインの属性を出力し、ACTIVE なドメインについて設定を収集
+
+ACTIVE 以外のドメインも `domains` に残し、`collected: false` と `reason: "domain_not_active"` を出力します。未収集のドメインに空の設定を与えることはありません。
 
 ### ドメインごとの収集
 
@@ -111,6 +113,8 @@ anyspec run scripts/oci_identity_domains.flow
 ### グループメンバー
 
 `members[startIndex=1&count=1000]` 形式の属性内ページ送り。
+グループ本体は default 属性で取得し、メンバーは最大 100,000 件まで別途取得します。上限超過や重複を検知した場合は収集をエラーにします。実 OCI でのページ送りの動作確認は別途必要です。
+入れ子のグループは重複と循環を除いて探索します。1 ドメインの探索上限は 10,000 グループ、合計 100,000 メンバーです。不明なメンバー種別はユーザー ID として扱わず警告します。
 
 ## 制約・注意事項
 
