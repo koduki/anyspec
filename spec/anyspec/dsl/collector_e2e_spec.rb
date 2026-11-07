@@ -214,22 +214,20 @@ RSpec.describe 'Collector E2E Test' do
       expect(result.warnings.length).to eq(3)
     end
 
-    it 'collector script emits warnings for validation errors' do
-      result = DSLTestHelper.run_collector_script(executor: mock_executor)
+    it 'keeps collecting and includes missing-reference and duplicate-sequence warnings in output' do
+      policies = DSLTestHelper.load_fixture('policies_all')
+      rules = policies['data']['resources'].first['rules']
+      rules.first['sequence'] = 1
+      rules << { 'value' => 'missing-rule', 'sequence' => 1 }
+      executor = DSLTestHelper::CollectorMockExecutor.new(fixtures: { policies: policies })
+      result = DSLTestHelper.run_collector_script(executor: executor)
 
-      # The script has validation logic that emits warnings
-      # Warnings are collected by the interpreter even though the script
-      # returns an empty warnings array in the result
-      expect(result.warnings).to be_an(Array)
-    end
-
-    it 'script output warnings array is separate from interpreter warnings' do
-      result = DSLTestHelper.run_collector_script(executor: mock_executor)
-
-      # Script returns { "domains": ..., "warnings": [] }
-      # But interpreter.warnings contains the actual warnings
-      expect(result.value['warnings']).to eq([])
-      expect(result.warnings).to be_an(Array)
+      expect(result['domains']).not_to be_empty
+      expect(result['warnings']).to eq(result.warnings)
+      messages = result['warnings'].map { |warning| warning[:message] }
+      expect(messages.any? { |message| message.include?('missing-rule') }).to be(true)
+      expect(messages.any? { |message| message.include?('duplicate rule sequence') }).to be(true)
+      expect(messages.any? { |message| message.include?('TestSignOnPolicy') }).to be(true)
     end
   end
 

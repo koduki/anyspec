@@ -237,4 +237,5 @@ $domain_results = foreach domain in $all_domains {
 $domains_map = pairs_to_map $domain_results 'id' 'data'
 
 # Return result
-{ "domains": $domains_map, "warnings": [] }
+$warnings = warnings
+{ "domains": $domains_map, "warnings": $warnings }

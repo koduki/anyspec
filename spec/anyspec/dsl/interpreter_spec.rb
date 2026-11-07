@@ -80,6 +80,11 @@ RSpec.describe Anyspec::DSL::Interpreter do
     it 'interpolates complex expressions' do
       expect(run('$x = 42' + "\n" + '"value: ${x}"')).to eq('value: 42')
     end
+
+    it 'interpolates object fields without executing arbitrary expressions' do
+      expect(run('$x = {"nested": {"name": "policy"}}' + "\n" + '"${x.nested.name}"')).to eq('policy')
+      expect { run('"${system(id)}"') }.to raise_error(Anyspec::DSL::RuntimeError, /Invalid interpolation/)
+    end
   end
 
   describe 'foreach' do

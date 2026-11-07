@@ -214,6 +214,9 @@ SCIMフィルタ用エスケープ。
 ### `warn message`
 警告を出力します（エラーにはなりません）。
 
+### `warnings`
+現在までに収集された警告（メッセージと位置）の配列を返します。
+
 ### `assert condition message`
 条件が false の場合エラーを発生させます。
 

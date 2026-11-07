@@ -211,7 +211,13 @@ module Anyspec
         if node.interpolated?
           result = node.value.dup
           node.interpolations.each_with_index do |var_name, idx|
-            value = @env.get(var_name)
+            unless var_name.match?(/\A[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_-]*)*\z/)
+              raise RuntimeError.new("Invalid interpolation: #{var_name}", node.location)
+            end
+            parts = var_name.split('.')
+            expr = AST::VariableRef.new(name: parts.shift, location: node.location)
+            parts.each { |field| expr = AST::FieldAccess.new(object: expr, field: field, location: node.location) }
+            value = evaluate(expr)
             result.gsub!("\x00#{idx}\x00", value.to_s)
           end
           result
