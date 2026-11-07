@@ -14,12 +14,19 @@ RSpec.describe Anyspec::CLI do
 
       it 'handles -v flag' do
         cli = described_class.new(['-v'])
-
-        expect { cli.run }.to output(/anyspec/).to_stdout
+        result = nil
+        expect { result = cli.run }.to output(/anyspec/).to_stdout
+        expect(result).to eq(0)
       end
     end
 
     context 'with help command' do
+      it 'returns from --help without exiting the caller' do
+        result = nil
+        expect { result = described_class.new(['--help']).run }.to output(/Usage:/).to_stdout
+        expect(result).to eq(0)
+      end
+
       it 'prints help and returns 0' do
         cli = described_class.new(['help'])
 

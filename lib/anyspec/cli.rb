@@ -26,6 +26,7 @@ module Anyspec
     def run
       parse_options!
       return 1 if @options[:parse_error]
+      return 0 if @options[:displayed_option]
 
       command = @argv.shift
 
@@ -97,12 +98,12 @@ module Anyspec
 
         opts.on('-h', '--help', 'Show this help') do
           puts opts
-          exit 0
+          @options[:displayed_option] = true
         end
 
         opts.on('-v', '--version', 'Show version') do
           puts "anyspec #{Anyspec::VERSION}"
-          exit 0
+          @options[:displayed_option] = true
         end
       end
 
