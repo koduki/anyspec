@@ -262,6 +262,31 @@ RSpec.describe Anyspec::DSL::OCI::Pagination do
 
       expect(result.length).to eq(2)
     end
+
+    [0, 999, 1000, 10_000, 10_001].each do |size|
+      it "collects #{size} members across page boundaries" do
+        members = Array.new(size) { |i| { 'value' => "user-#{i}", 'type' => 'User' } }
+        executor = instance_double(Anyspec::DSL::OCI::Executor)
+        allow(executor).to receive(:execute) do |args, **_kwargs|
+          attributes = args[args.index('--attributes') + 1]
+          start = attributes.match(/startIndex=(\d+)/)[1].to_i
+          { 'id' => 'group', 'members' => members.slice(start - 1, 1000) || [] }
+        end
+        result = described_class.new(executor: executor).group_members_paginate(
+          group_id: 'group', endpoint: 'https://test', location: nil
+        )
+        expect(result).to eq(members)
+      end
+    end
+
+    it 'rejects repeated members instead of silently deduplicating pages' do
+      executor = instance_double(Anyspec::DSL::OCI::Executor)
+      repeated = Array.new(1000) { |i| { 'value' => "user-#{i}" } }
+      allow(executor).to receive(:execute).and_return({ 'members' => repeated })
+      expect do
+        described_class.new(executor: executor).group_members_paginate(group_id: 'g', endpoint: 'https://test', location: nil)
+      end.to raise_error(Anyspec::DSL::OCI::PaginationError, /Duplicate group member/)
+    end
   end
 
   describe 'raw-request pagination' do

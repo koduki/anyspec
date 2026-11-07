@@ -170,6 +170,11 @@ RSpec.describe 'Collector E2E Test' do
       target_groups = result['domains'].values.first['collections']['targetGroups']
 
       expect(target_groups).not_to be_empty
+      group_requests = mock_executor.calls.select do |call|
+        call[:argv].join(' ').include?('identity-domains group get') && !call[:argv].include?('--attributes')
+      end
+      expect(group_requests).not_to be_empty
+      expect(group_requests).to all(satisfy { |call| call[:argv].include?('--attribute-sets') && call[:argv].include?('default') })
     end
 
     it 'collects target users from grantees and group members' do

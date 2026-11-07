@@ -130,6 +130,9 @@ module Anyspec
               "--#{cli_resource}-id", resource_id
             ]
 
+            # Group members are requested separately with attribute pagination.
+            cmd.concat(['--attribute-sets', 'default']) if cli_resource == 'group'
+
             @executor.execute(cmd, location: loc)
           end
 

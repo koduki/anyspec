@@ -9,7 +9,7 @@ module Anyspec
         MAX_SCIM_COUNT = 1000
         MAX_PAGES = 1000
         MAX_TOTAL_RESULTS = 100_000
-        MAX_MEMBERS_PER_REQUEST = 10_000
+        MAX_GROUP_MEMBERS = 100_000
 
         def initialize(executor:)
           @executor = executor
@@ -208,27 +208,33 @@ module Anyspec
             ]
 
             response = @executor.execute(cmd, location: location)
+            unless response.is_a?(Hash)
+              raise PaginationError.new('Group response must be an object', location)
+            end
             members = response['members'] || []
+            unless members.is_a?(Array)
+              raise PaginationError.new('Group members must be an array', location)
+            end
 
             break if members.empty?
 
             members.each do |member|
+              raise PaginationError.new('Group member must be an object', location) unless member.is_a?(Hash)
               id = member['value']
-              next if id && seen_ids.include?(id)
+              if id && seen_ids.include?(id)
+                raise PaginationError.new("Duplicate group member id: #{id}", location)
+              end
               seen_ids.add(id) if id
               all_members << member
             end
 
+            if all_members.length > MAX_GROUP_MEMBERS
+              raise PaginationError.new("Group has too many members (>#{MAX_GROUP_MEMBERS})", location)
+            end
+
             break if members.length < count
             
-            start_index += count
-            
-            if start_index > MAX_MEMBERS_PER_REQUEST
-              raise PaginationError.new(
-                "Group has too many members (>#{MAX_MEMBERS_PER_REQUEST})",
-                location
-              )
-            end
+            start_index += members.length
           end
 
           all_members
