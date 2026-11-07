@@ -97,7 +97,7 @@ RSpec.describe 'OCI Identity Domains Collection Mechanism' do
       config = Anyspec::Config.new(oci_cli: '/bin/echo')
       executor = Anyspec::DSL::OCI::Executor.new(config: config)
 
-      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true, exitstatus: 0)])
+      allow(executor).to receive(:run_with_timeout).and_return(['', '', double(success?: true, exitstatus: 0)])
 
       result = executor.execute(
         ['oci', 'iam', 'domain', 'list', '--compartment-id', 'test'],

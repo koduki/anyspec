@@ -2,7 +2,7 @@
 
 require 'open3'
 require 'json'
-require 'timeout'
+require 'thread'
 
 module Anyspec
   module DSL
@@ -87,26 +87,72 @@ module Anyspec
         end
 
         def run_with_timeout(cmd_array, location)
-          stdout = ''
-          stderr = ''
-          status = nil
+          buffers = { stdout: ''.b, stderr: ''.b }
+          queue = SizedQueue.new(8)
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
+          windows = RUBY_PLATFORM.match?(/mswin|mingw|cygwin/)
+          options = windows ? {} : { pgroup: true }
 
-          begin
-            Timeout.timeout(@timeout) do
-              stdout, stderr, status = Open3.capture3(*cmd_array, stdin_data: '')
+          Open3.popen3(*cmd_array, **options) do |stdin, stdout, stderr, wait_thread|
+            stdin.close
+            readers = { stdout: stdout, stderr: stderr }.map do |name, stream|
+              Thread.new do
+                begin
+                  loop { queue.push([name, stream.readpartial(16_384)]) }
+                rescue EOFError
+                  queue.push([name, nil])
+                rescue IOError, SystemCallError => e
+                  queue.push([:read_error, e])
+                end
+              end
             end
-          rescue Timeout::Error
-            raise TimeoutError.new("Command timed out after #{@timeout}s", location)
+            completed_streams = 0
+            completed = false
+            begin
+              until completed_streams == 2 && !wait_thread.alive?
+                if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+                  raise TimeoutError.new("Command timed out after #{@timeout}s", location)
+                end
+                begin
+                  name, chunk = queue.pop(true)
+                rescue ThreadError
+                  sleep 0.005
+                  next
+                end
+                raise ExecutorError.new("OCI CLI output read failed: #{chunk.message}", location) if name == :read_error
+                if chunk.nil?
+                  completed_streams += 1
+                  next
+                end
+                buffers[name] << chunk
+                if buffers[:stdout].bytesize + buffers[:stderr].bytesize > @max_output
+                  raise OutputTooLargeError.new("Combined stdout/stderr exceeds #{@max_output} bytes", location)
+                end
+              end
+              status = wait_thread.value
+              completed = true
+              [buffers[:stdout].force_encoding(Encoding::UTF_8), buffers[:stderr].force_encoding(Encoding::UTF_8), status]
+            ensure
+              terminate_process(wait_thread, windows: windows) unless completed
+              [stdout, stderr].each { |stream| stream.close unless stream.closed? }
+              readers.each { |thread| thread.kill if thread.alive? }
+              readers.each(&:join)
+            end
           end
+        end
 
-          if stdout.bytesize > @max_output
-            raise OutputTooLargeError.new(
-              "Output too large: #{stdout.bytesize} bytes (max: #{@max_output})",
-              location
-            )
+        def terminate_process(wait_thread, windows:)
+          target = windows ? wait_thread.pid : -wait_thread.pid
+          begin
+            Process.kill('TERM', target)
+          rescue Errno::ESRCH, Errno::EPERM, NotImplementedError
           end
-
-          [stdout, stderr, status]
+          wait_thread.join(0.2)
+          begin
+            Process.kill('KILL', target)
+          rescue Errno::ESRCH, Errno::EPERM, NotImplementedError
+          end
+          wait_thread.join
         end
 
         def validate_output(stdout, stderr, status, location, cmd_array)
