@@ -11,14 +11,29 @@ $active_compartments = filter $compartments 'lifecycle-state' 'ACTIVE'
 # Step 2: Discover all domains across compartments
 $all_domain_lists = foreach compartment in $active_compartments {
   $cid = $compartment.id
-  $domains = oci_list_domains $cid
-  filter $domains 'lifecycle-state' 'ACTIVE'
+  oci_list_domains $cid
 }
 $all_domains = flatten $all_domain_lists
 $all_domains = unique_by $all_domains 'id'
+$active_domains = filter $all_domains 'lifecycle-state' 'ACTIVE'
+$inactive_domains = filter_not $all_domains 'lifecycle-state' 'ACTIVE'
+
+# Retain inventory metadata even where the domain cannot be collected.
+$inactive_domain_results = foreach domain in $inactive_domains {
+  $meta = {
+    "id": $domain.id,
+    "name": $domain["display-name"],
+    "url": $domain.url,
+    "compartment-id": $domain["compartment-id"],
+    "lifecycle-state": $domain["lifecycle-state"],
+    "type": $domain.type,
+    "home-region": $domain["home-region"]
+  }
+  { "id": $domain.id, "data": { "meta": $meta, "collected": false, "reason": "domain_not_active" } }
+}
 
 # Step 3: For each domain, collect configuration (returns array of {id, data} pairs)
-$domain_results = foreach domain in $all_domains {
+$domain_results = foreach domain in $active_domains {
   $domain_id = $domain.id
   $endpoint = $domain.url
   $domain_name = $domain["display-name"]
@@ -33,7 +48,7 @@ $domain_results = foreach domain in $all_domains {
     "type": $domain.type,
     "home-region": $domain["home-region"]
   }
-  $domain_data = { "meta": $domain_meta, "collections": {} }
+  $domain_data = { "meta": $domain_meta, "collections": {}, "collected": true }
   
   # Collect Policies with required attributes
   $policies = oci_domain_list $endpoint 'policies' 'id,name,active,policyType,rules'
@@ -234,7 +249,8 @@ $domain_results = foreach domain in $all_domains {
 
 # Build final result from foreach results (outside foreach scope)
 # pairs_to_map converts [{id: k1, data: v1}, ...] to {k1: v1, ...}
-$domains_map = pairs_to_map $domain_results 'id' 'data'
+$all_domain_results = concat $domain_results $inactive_domain_results
+$domains_map = pairs_to_map $all_domain_results 'id' 'data'
 
 # Return result
 $warnings = warnings

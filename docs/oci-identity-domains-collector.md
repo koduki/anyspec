@@ -55,7 +55,9 @@ anyspec run scripts/oci_identity_domains.flow
 
 1. `oci iam compartment list` でテナンシー配下の全コンパートメントを取得
 2. 各コンパートメントで `oci iam domain list` を実行
-3. ACTIVE なドメインのみを対象
+3. 全ドメインの属性を出力し、ACTIVE なドメインについて設定を収集
+
+ACTIVE 以外のドメインも `domains` に残し、`collected: false` と `reason: "domain_not_active"` を出力します。未収集のドメインに空の設定を与えることはありません。
 
 ### ドメインごとの収集
 
