@@ -1,0 +1,29 @@
+{
+  "data": {
+    "resources": [
+      {
+        "active": true,
+        "display-name": "OCI Console",
+        "id": "OciConsoleAppId",
+        "name": "OciConsole_APPID",
+        "signon-policy": {
+          "ref": "https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/Policies/OciConsolePolicy",
+          "value": "OciConsolePolicy"
+        },
+        "idp-policy": null,
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:App"]
+      },
+      {
+        "active": true,
+        "display-name": "IAM Login Client",
+        "id": "LoginClientAppId",
+        "name": "LoginClient_APPID",
+        "signon-policy": null,
+        "idp-policy": null,
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:App"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "2"
+}

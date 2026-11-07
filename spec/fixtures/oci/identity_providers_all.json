@@ -1,0 +1,16 @@
+{
+  "data": {
+    "resources": [
+      {
+        "id": "TestIdP1",
+        "partner-name": "AzureAD",
+        "partner-provider-id": "azure-ad-12345",
+        "enabled": true,
+        "type": "SAML",
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:IdentityProvider"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "1"
+}

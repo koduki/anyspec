@@ -1,0 +1,14 @@
+{
+  "data": {
+    "resources": [
+      {
+        "type": "User",
+        "value": "TestAdminUserId",
+        "display": "test.admin@example.com",
+        "date-added": "2024-01-01T00:00:00.000Z"
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "1"
+}

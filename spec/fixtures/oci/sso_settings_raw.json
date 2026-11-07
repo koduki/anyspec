@@ -1,0 +1,7 @@
+{
+  "data": "{\"Resources\":[{\"externalId\":null,\"id\":\"SsoSettingsId\",\"tenancyOcid\":\"ocid1.tenancy.oc1..aaaaaaaatesttenancy\",\"schemas\":[\"urn:ietf:params:scim:schemas:oracle:idcs:SsoSettings\"],\"meta\":{\"resourceType\":\"SsoSettings\",\"created\":\"2024-01-01T00:00:00.000Z\",\"lastModified\":\"2024-01-01T00:00:00.000Z\",\"location\":\"https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/SsoSettings/SsoSettingsId\",\"version\":\"abc123\"}}],\"totalResults\":1,\"startIndex\":1,\"itemsPerPage\":50,\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:ListResponse\"]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": "200 OK"
+}

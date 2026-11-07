@@ -1,0 +1,44 @@
+{
+  "data": {
+    "resources": [
+      {
+        "id": "AuthenticationFactorSettings",
+        "bypass-code-enabled": true,
+        "bypass-code-settings": {
+          "max-active": 5,
+          "help-desk-code-expiry-in-mins": 60,
+          "help-desk-max-usage": 1
+        },
+        "client-app-settings": {
+          "request-signing-algo": "SHA256withRSA",
+          "device-protection-policy": "NONE"
+        },
+        "compliance-policy": [],
+        "email-enabled": true,
+        "endpoint-restrictions": {
+          "max-endpoint-trust-duration-in-days": 180
+        },
+        "fido-authenticator-enabled": false,
+        "mfa-enrollment-type": "Optional",
+        "notification-settings": {
+          "pull-enabled": true
+        },
+        "phone-call-enabled": false,
+        "push-enabled": true,
+        "security-questions-enabled": true,
+        "sms-enabled": true,
+        "totp-enabled": true,
+        "totp-settings": {
+          "hashing-algorithm": "SHA1",
+          "jwt-validity-duration-in-secs": 300,
+          "key-refresh-interval-in-days": 60,
+          "passcode-length": 6,
+          "time-step-in-secs": 30
+        },
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:AuthenticationFactorSettings"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "1"
+}

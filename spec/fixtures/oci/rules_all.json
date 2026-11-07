@@ -1,0 +1,40 @@
+{
+  "data": {
+    "resources": [
+      {
+        "active": true,
+        "id": "TestRule1",
+        "name": "TestRule1",
+        "condition-group": {
+          "type": "Condition",
+          "value": "TestCondition1"
+        },
+        "return": [
+          {
+            "name": "allowAccess",
+            "value": "true"
+          }
+        ],
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Rule"]
+      },
+      {
+        "active": true,
+        "id": "TestRule2",
+        "name": "TestRule2",
+        "condition-group": {
+          "type": "ConditionGroup",
+          "value": "TestConditionGroup1"
+        },
+        "return": [
+          {
+            "name": "requireMfa",
+            "value": "true"
+          }
+        ],
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Rule"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "2"
+}

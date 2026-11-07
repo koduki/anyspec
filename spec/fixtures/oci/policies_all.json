@@ -1,0 +1,35 @@
+{
+  "data": {
+    "resources": [
+      {
+        "active": true,
+        "id": "TestSignOnPolicy",
+        "name": "TestSignOnPolicy",
+        "policy-type": {
+          "ref": "https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/PolicyTypes/SignOn",
+          "value": "SignOn"
+        },
+        "rules": [
+          {
+            "ref": "https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/Rules/TestRule1",
+            "value": "TestRule1"
+          }
+        ],
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Policy"]
+      },
+      {
+        "active": true,
+        "id": "OciConsolePolicy",
+        "name": "OciConsolePolicy",
+        "policy-type": {
+          "ref": "https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/PolicyTypes/SignOn",
+          "value": "SignOn"
+        },
+        "rules": [],
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Policy"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "2"
+}

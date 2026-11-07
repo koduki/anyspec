@@ -34,6 +34,8 @@ module Anyspec
         run_check
       when 'validate'
         run_validate
+      when 'run'
+        run_dsl_script
       when 'version', '-v', '--version'
         puts "anyspec #{Anyspec::VERSION}"
         0
@@ -56,6 +58,7 @@ module Anyspec
         opts.separator "Commands:"
         opts.separator "  check <spec.yml|dir>     Run checks against OCI resources"
         opts.separator "  validate <spec.yml|dir>  Validate spec files offline (no OCI access)"
+        opts.separator "  run <script.flow>        Execute a DSL script to collect OCI resources"
         opts.separator "  version                  Show version"
         opts.separator "  help                     Show this help"
         opts.separator ""
@@ -232,6 +235,66 @@ module Anyspec
       end
     end
 
+    def run_dsl_script
+      script_path = @argv.shift
+      unless script_path
+        $stderr.puts "Error: script file required"
+        return 1
+      end
+
+      unless File.exist?(script_path)
+        $stderr.puts "Error: #{script_path} not found"
+        return 1
+      end
+
+      unless script_path.end_with?('.flow')
+        $stderr.puts "Warning: script should have .flow extension"
+      end
+
+      require_relative 'dsl/runner'
+
+      config = Config.new(
+        profile: @options[:profile],
+        config_path: @options[:config_path],
+        auth_mode: @options[:auth_mode],
+        oci_cli: @options[:oci_cli]
+      )
+
+      env_vars = {
+        'TENANCY_OCID' => ENV['OCI_TENANCY_OCID']
+      }
+
+      runner = DSL::Runner.new(config: config)
+      result = runner.run_file(script_path, env_vars: env_vars)
+
+      out_dir = @options[:out_dir]
+      FileUtils.mkdir_p(out_dir)
+
+      output_path = File.join(out_dir, 'identity_domains.json')
+      File.write(output_path, JSON.pretty_generate(result))
+      puts "Output written to #{output_path}"
+
+      if runner.warnings.any?
+        puts "\nWarnings (#{runner.warnings.length}):"
+        runner.warnings.each do |warning|
+          loc = warning[:location] ? "[#{warning[:location]}] " : ''
+          puts "  #{loc}#{warning[:message]}"
+        end
+      end
+
+      0
+    rescue DSL::LexerError, DSL::ParseError, DSL::RuntimeError => e
+      $stderr.puts "Script error: #{e.message}"
+      2
+    rescue Anyspec::Error => e
+      $stderr.puts "Error: #{e.message}"
+      2
+    rescue StandardError => e
+      $stderr.puts "Unexpected error: #{e.message}"
+      $stderr.puts e.backtrace.first(5).join("\n") if ENV['DEBUG']
+      2
+    end
+
     def write_reports(results, summary, run_metadata)
       out_dir = @options[:out_dir]
       FileUtils.mkdir_p(out_dir)
@@ -319,6 +382,7 @@ module Anyspec
         Commands:
           check <spec.yml|dir>     Run checks against OCI resources
           validate <spec.yml|dir>  Validate spec files offline (no OCI access required)
+          run <script.flow>        Execute a DSL script to collect OCI Identity Domains
           version                  Show version
           help                     Show this help
 

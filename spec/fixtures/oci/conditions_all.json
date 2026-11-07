@@ -1,0 +1,26 @@
+{
+  "data": {
+    "resources": [
+      {
+        "id": "TestCondition1",
+        "name": "TestCondition1",
+        "attribute-name": "client.ipAddress",
+        "attribute-value": "iprange:TestNetworkPerimeter1",
+        "evaluate-condition-if": {
+          "type": "Group",
+          "value": "TestAdminGroupId"
+        },
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Condition"]
+      },
+      {
+        "id": "TestCondition2",
+        "name": "TestCondition2",
+        "attribute-name": "user.memberOf",
+        "attribute-value": "TestAdminGroupId",
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Condition"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "2"
+}

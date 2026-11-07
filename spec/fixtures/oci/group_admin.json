@@ -1,0 +1,16 @@
+{
+  "data": {
+    "id": "TestAdminGroupId",
+    "display-name": "Administrators",
+    "description": "Domain Administrators Group",
+    "members": [
+      {
+        "type": "User",
+        "value": "TestAdminUserId",
+        "display": "test.admin@example.com",
+        "ref": "https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/Users/TestAdminUserId"
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"]
+  }
+}

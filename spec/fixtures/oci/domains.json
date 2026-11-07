@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "compartment-id": "ocid1.tenancy.oc1..aaaaaaaatesttenancy",
+      "defined-tags": {},
+      "description": "Default Identity Domain",
+      "display-name": "Default",
+      "freeform-tags": {},
+      "home-region": "us-ashburn-1",
+      "home-region-url": "https://idcs-test12345.identity.oraclecloud.com:443",
+      "id": "ocid1.domain.oc1..aaaaaaaatestdomain12345",
+      "is-hidden-on-login": false,
+      "license-type": "free",
+      "lifecycle-details": null,
+      "lifecycle-state": "ACTIVE",
+      "replica-regions": [],
+      "state": "ACTIVE",
+      "time-created": "2024-01-01T00:00:00.000Z",
+      "type": "DEFAULT",
+      "url": "https://idcs-test12345.identity.oraclecloud.com:443"
+    }
+  ]
+}
