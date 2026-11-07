@@ -11,11 +11,13 @@ require_relative 'anyspec/reporters/github_actions_reporter'
 require_relative 'anyspec/adapter_registry'
 require_relative 'anyspec/validator'
 require_relative 'anyspec/adapters/base'
+require_relative 'anyspec/adapters/generic_cli'
 require_relative 'anyspec/adapters/cloud_guard_configuration'
 require_relative 'anyspec/adapters/cloud_guard_target'
 require_relative 'anyspec/adapters/identity_authentication_policy'
 require_relative 'anyspec/adapters/audit_configuration'
 require_relative 'anyspec/adapters/object_storage_bucket'
+require_relative 'anyspec/external_adapter_loader'
 require_relative 'anyspec/cli'
 
 module Anyspec

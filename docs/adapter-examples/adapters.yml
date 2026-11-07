@@ -1,0 +1,101 @@
+# Example external adapter definitions for anyspec
+# Place in your repo under a version-controlled path and use --adapters-dir to load
+#
+# Best practice: Keep adapter definitions alongside your spec YAML in the same repo
+# so they're version-controlled together as part of the 「動く設計書」
+#
+# Usage:
+#   anyspec check specs/ --adapters-dir ./adapters
+#   # or
+#   export ANYSPEC_ADAPTERS_DIR=./adapters
+#   anyspec check specs/
+
+schema_version: "1.0"
+
+adapters:
+  # VCN Security List adapter
+  # Demonstrates get-by-id and list-by-name alternative locators
+  - type: vcn_security_list
+    locators:
+      # Method 1: Get by security list ID (preferred when ID is known)
+      - subcommand: network security-list get
+        required_fields:
+          - security_list_id
+        flag_mappings:
+          security_list_id: --security-list-id
+        extract_fields:
+          - id
+          - display_name
+          - compartment_id
+          - vcn_id
+          - lifecycle_state
+          - ingress_security_rules
+          - egress_security_rules
+
+      # Method 2: List and filter by name (fallback when only name is known)
+      - subcommand: network security-list list
+        required_fields:
+          - compartment_id
+          - name
+        flag_mappings:
+          compartment_id: --compartment-id
+          vcn_id: --vcn-id
+        static_flags:
+          - { "--limit": "100" }
+        list_filter_field: display-name
+        list_filter_spec_field: name
+        extract_fields:
+          - id
+          - display_name
+          - compartment_id
+          - lifecycle_state
+
+  # Network Security Group adapter
+  - type: network_security_group
+    locators:
+      - subcommand: network nsg get
+        required_fields:
+          - nsg_id
+        flag_mappings:
+          nsg_id: --nsg-id
+        extract_fields:
+          - id
+          - display_name
+          - compartment_id
+          - vcn_id
+          - lifecycle_state
+
+      - subcommand: network nsg list
+        required_fields:
+          - compartment_id
+          - name
+        flag_mappings:
+          compartment_id: --compartment-id
+          vcn_id: --vcn-id
+        static_flags:
+          - { "--limit": "100" }
+        list_filter_field: display-name
+        list_filter_spec_field: name
+        extract_fields:
+          - id
+          - display_name
+          - compartment_id
+          - lifecycle_state
+
+  # Vault Key adapter (for KMS key checks)
+  - type: vault_key
+    locators:
+      - subcommand: kms management key get
+        required_fields:
+          - key_id
+          - management_endpoint
+        flag_mappings:
+          key_id: --key-id
+          management_endpoint: --endpoint
+        extract_fields:
+          - id
+          - display_name
+          - compartment_id
+          - lifecycle_state
+          - protection_mode
+          - key_shape
