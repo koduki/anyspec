@@ -114,6 +114,62 @@ RSpec.describe Anyspec::DSL::Interpreter do
     end
   end
 
+  describe 'parenthesized expressions' do
+    it 'evaluates parenthesized command as argument' do
+      result = run(<<~DSL)
+        $x = [1, 2, 3]
+        if_then (is_array $x) "yes" "no"
+      DSL
+      expect(result).to eq('yes')
+    end
+
+    it 'evaluates nested parenthesized expressions' do
+      result = run(<<~DSL)
+        $a = "test"
+        $b = [1, 2]
+        $c = [3, 4]
+        if_then (not_eq $a null) (concat $b $c) []
+      DSL
+      expect(result).to eq([1, 2, 3, 4])
+    end
+  end
+
+  describe 'foreach as assignment' do
+    it 'assigns foreach result to variable' do
+      result = run(<<~DSL)
+        $items = [1, 2, 3]
+        $doubled = foreach x in $items {
+          $x
+        }
+        $doubled
+      DSL
+      expect(result).to eq([1, 2, 3])
+    end
+
+    it 'collects nested results' do
+      result = run(<<~DSL)
+        $items = [[1, 2], [3, 4]]
+        $flat = foreach arr in $items {
+          first $arr
+        }
+        $flat
+      DSL
+      expect(result).to eq([1, 3])
+    end
+  end
+
+  describe 'comment handling' do
+    it 'handles scripts starting with comments' do
+      result = run(<<~DSL)
+        # This is a comment
+        # Another comment
+        $x = 42
+        $x
+      DSL
+      expect(result).to eq(42)
+    end
+  end
+
   describe 'error handling' do
     it 'includes location in undefined variable error' do
       expect { run('$undefined') }.to raise_error(

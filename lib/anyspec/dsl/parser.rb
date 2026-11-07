@@ -32,12 +32,15 @@ module Anyspec
       private
 
       def parse_statement
-        skip_comments_inline
+        skip_comments_and_newlines
         return nil if at_end?
 
         case current.type
         when :COMMENT
           parse_comment
+        when :NEWLINE
+          advance
+          nil
         when :FOREACH
           parse_foreach
         when :VARIABLE
@@ -85,7 +88,11 @@ module Anyspec
       def parse_assignment
         var_token = consume(:VARIABLE)
         consume(:ASSIGN)
-        value = parse_pipeline
+        value = if check(:FOREACH)
+                  parse_foreach
+                else
+                  parse_pipeline
+                end
         AST::Assignment.new(
           name: var_token.value[1..],
           value: value,
@@ -124,7 +131,8 @@ module Anyspec
         !%w[true false null].include?(name) &&
           (peek_next.nil? || 
            [:IDENTIFIER, :VARIABLE, :FLAG, :SHORT_FLAG, :SINGLE_STRING, 
-            :DOUBLE_STRING, :NUMBER, :OCID, :PIPE, :NEWLINE, :EOF, :RBRACE].include?(peek_next.type))
+            :DOUBLE_STRING, :NUMBER, :OCID, :PIPE, :NEWLINE, :EOF, :RBRACE, 
+            :LBRACKET, :LPAREN, :TRUE, :FALSE, :NULL, :RPAREN].include?(peek_next.type))
       end
 
       def parse_command
@@ -144,7 +152,8 @@ module Anyspec
 
       def argument_token?
         [:IDENTIFIER, :VARIABLE, :FLAG, :SHORT_FLAG, :SINGLE_STRING, 
-         :DOUBLE_STRING, :NUMBER, :OCID].include?(current.type)
+         :DOUBLE_STRING, :NUMBER, :OCID, :LPAREN, :LBRACKET, 
+         :TRUE, :FALSE, :NULL].include?(current.type)
       end
 
       def parse_argument
@@ -166,6 +175,19 @@ module Anyspec
         when :IDENTIFIER
           token = advance
           AST::StringLiteral.new(value: token.value, location: token.location)
+        when :LPAREN
+          parse_parenthesized
+        when :LBRACKET
+          parse_array
+        when :TRUE
+          loc = advance.location
+          AST::BooleanLiteral.new(value: true, location: loc)
+        when :FALSE
+          loc = advance.location
+          AST::BooleanLiteral.new(value: false, location: loc)
+        when :NULL
+          loc = advance.location
+          AST::NullLiteral.new(location: loc)
         else
           raise ParseError.new("Unexpected token in argument: #{current.type}", current.location)
         end
@@ -227,6 +249,8 @@ module Anyspec
           parse_array
         when :LBRACE
           parse_hash
+        when :LPAREN
+          parse_parenthesized
         when :IDENTIFIER
           if command_start?
             parse_command
@@ -239,11 +263,20 @@ module Anyspec
         end
       end
 
+      def parse_parenthesized
+        consume(:LPAREN)
+        skip_newlines
+        expr = parse_pipeline
+        skip_newlines
+        consume(:RPAREN)
+        expr
+      end
+
       def parse_variable_access
         var_token = consume(:VARIABLE)
         expr = AST::VariableRef.new(name: var_token.value[1..], location: var_token.location)
 
-        while check(:DOT) || check(:LBRACKET)
+        while check(:DOT) || (check(:LBRACKET) && !empty_array_ahead?)
           if check(:DOT)
             advance
             field_token = consume(:IDENTIFIER)
@@ -265,6 +298,10 @@ module Anyspec
         end
 
         expr
+      end
+
+      def empty_array_ahead?
+        check(:LBRACKET) && peek_next&.type == :RBRACKET
       end
 
       def parse_single_string
@@ -354,6 +391,12 @@ module Anyspec
 
       def skip_comments_inline
         advance while check(:COMMENT) && !at_end?
+      end
+
+      def skip_comments_and_newlines
+        while (check(:COMMENT) || check(:NEWLINE)) && !at_end?
+          advance
+        end
       end
 
       def current

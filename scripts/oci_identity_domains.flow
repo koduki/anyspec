@@ -13,13 +13,12 @@ $compartments = oci_list_compartments $tenancy_ocid
 $active_compartments = filter $compartments 'lifecycle-state' 'ACTIVE'
 
 # Step 2: Discover all domains across compartments
-$all_domains = []
-foreach compartment in $active_compartments {
+$all_domain_lists = foreach compartment in $active_compartments {
   $cid = $compartment.id
   $domains = oci_list_domains $cid
-  $active_domains = filter $domains 'lifecycle-state' 'ACTIVE'
-  concat $all_domains $active_domains | flatten
+  filter $domains 'lifecycle-state' 'ACTIVE'
 }
+$all_domains = flatten $all_domain_lists
 $all_domains = unique_by $all_domains 'id'
 
 # Step 3: For each domain, collect configuration

@@ -99,4 +99,37 @@ RSpec.describe Anyspec::DSL::Runner do
       expect(result).to include('Missing Rule reference: b')
     end
   end
+
+  describe 'collector script parsing' do
+    let(:script_path) do
+      File.expand_path('../../../../scripts/oci_identity_domains.flow', __FILE__)
+    end
+
+    it 'parses the OCI Identity Domains collector script without error' do
+      source = File.read(script_path)
+      lexer = Anyspec::DSL::Lexer.new(source, file: 'oci_identity_domains.flow')
+      tokens = lexer.tokenize
+      parser = Anyspec::DSL::Parser.new(tokens, file: 'oci_identity_domains.flow')
+      
+      expect { parser.parse }.not_to raise_error
+    end
+
+    it 'handles all patterns used in the collector script' do
+      patterns = [
+        '# Comment line only',
+        '$x = foreach item in $items { $item }',
+        'if_then (is_array $x) "yes" "no"',
+        'if_then (not_eq $a null) (concat $b $c) []',
+        'check_ref [$id] $lookup "Type"',
+        'warn "message ${var}"'
+      ]
+      
+      patterns.each do |pattern|
+        lexer = Anyspec::DSL::Lexer.new(pattern, file: '<test>')
+        tokens = lexer.tokenize
+        parser = Anyspec::DSL::Parser.new(tokens, file: '<test>')
+        expect { parser.parse }.not_to raise_error, "Failed to parse: #{pattern}"
+      end
+    end
+  end
 end

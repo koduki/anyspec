@@ -145,6 +145,100 @@ RSpec.describe Anyspec::DSL::Parser do
     end
   end
 
+  describe 'comment-only lines' do
+    it 'parses scripts starting with comment-only lines' do
+      program = parse("# This is a comment\n$x = 42")
+      assignments = program.statements.reject { |s| s.is_a?(Anyspec::DSL::AST::Comment) }
+      expect(assignments.length).to eq(1)
+      expect(assignments.first).to be_a(Anyspec::DSL::AST::Assignment)
+    end
+
+    it 'parses multiple comment-only lines' do
+      program = parse("# Comment 1\n# Comment 2\n# Comment 3\n$x = 42")
+      assignments = program.statements.reject { |s| s.is_a?(Anyspec::DSL::AST::Comment) }
+      expect(assignments.length).to eq(1)
+    end
+
+    it 'handles empty lines after comments' do
+      program = parse("# Comment\n\n$x = 42")
+      assignments = program.statements.reject { |s| s.is_a?(Anyspec::DSL::AST::Comment) }
+      expect(assignments.length).to eq(1)
+    end
+  end
+
+  describe 'parenthesized expressions' do
+    it 'parses parenthesized command as argument' do
+      program = parse('if_then (is_array $x) "yes" "no"')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Command)
+      expect(stmt.arguments.length).to eq(3)
+    end
+
+    it 'parses nested parenthesized expressions' do
+      program = parse('if_then (not_eq $a null) (concat $b $c) []')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Command)
+      expect(stmt.arguments.length).to eq(3)
+    end
+
+    it 'parses parentheses with array argument' do
+      program = parse('if_then $cond (check_ref [$id] $lookup "Type") []')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(3)
+    end
+  end
+
+  describe 'arrays as command arguments' do
+    it 'parses array literal as command argument' do
+      program = parse('concat [1, 2] [3, 4]')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(2)
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::ArrayLiteral)
+    end
+
+    it 'parses empty array as command argument' do
+      program = parse('default $x []')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(2)
+      expect(stmt.arguments[1]).to be_a(Anyspec::DSL::AST::ArrayLiteral)
+    end
+  end
+
+  describe 'booleans and null as command arguments' do
+    it 'parses true as command argument' do
+      program = parse('assert true "message"')
+      stmt = program.statements.first
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::BooleanLiteral)
+      expect(stmt.arguments[0].value).to be true
+    end
+
+    it 'parses false as command argument' do
+      program = parse('if_then false "no" "yes"')
+      stmt = program.statements.first
+      expect(stmt.arguments[0]).to be_a(Anyspec::DSL::AST::BooleanLiteral)
+      expect(stmt.arguments[0].value).to be false
+    end
+
+    it 'parses null as command argument' do
+      program = parse('eq $x null')
+      stmt = program.statements.first
+      expect(stmt.arguments[1]).to be_a(Anyspec::DSL::AST::NullLiteral)
+    end
+  end
+
+  describe 'foreach as assignment value' do
+    it 'parses foreach assigned to variable' do
+      program = parse(<<~DSL)
+        $results = foreach x in $items {
+          $x
+        }
+      DSL
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Assignment)
+      expect(stmt.value).to be_a(Anyspec::DSL::AST::Foreach)
+    end
+  end
+
   describe 'error handling' do
     it 'includes location in error' do
       expect { parse('$x =') }.to raise_error(Anyspec::DSL::ParseError, /<test>:1:\d+/)
