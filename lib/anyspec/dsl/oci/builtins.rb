@@ -165,9 +165,16 @@ module Anyspec
                 response = @executor.execute(cmd, location: loc)
                 body = response['data']
                 if body.is_a?(String)
-                  JSON.parse(body)
+                  begin
+                    parsed = JSON.parse(body)
+                    parsed['Resources'] || parsed['resources'] || [parsed]
+                  rescue JSON::ParserError
+                    []
+                  end
+                elsif body.is_a?(Hash)
+                  body['Resources'] || body['resources'] || [body]
                 else
-                  body
+                  []
                 end
               else
                 @pagination.raw_request_paginate(endpoint: endpoint, path: path, location: loc)

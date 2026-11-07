@@ -1,0 +1,48 @@
+{
+  "data": {
+    "resources": [
+      {
+        "app": {
+          "display": "IDCS Application",
+          "name": "IDCSApp",
+          "value": "IDCSAppId"
+        },
+        "entitlement": {
+          "attribute-name": "appRoles",
+          "attribute-value": "IdentityDomainAdminRoleId"
+        },
+        "grant-mechanism": "ADMINISTRATOR_TO_GROUP",
+        "grantee": {
+          "display": "Administrators",
+          "ref": "https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/Groups/TestAdminGroupId",
+          "type": "Group",
+          "value": "TestAdminGroupId"
+        },
+        "id": "TestGrantToGroup",
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Grant"]
+      },
+      {
+        "app": {
+          "display": "IDCS Application",
+          "name": "IDCSApp",
+          "value": "IDCSAppId"
+        },
+        "entitlement": {
+          "attribute-name": "appRoles",
+          "attribute-value": "IdentityDomainAdminRoleId"
+        },
+        "grant-mechanism": "ADMINISTRATOR_TO_USER",
+        "grantee": {
+          "display": "test.admin@example.com",
+          "ref": "https://idcs-test12345.identity.oraclecloud.com:443/admin/v1/Users/TestAdminUserId",
+          "type": "User",
+          "value": "TestAdminUserId"
+        },
+        "id": "TestGrantToUser",
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:Grant"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "2"
+}

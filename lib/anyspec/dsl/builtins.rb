@@ -297,6 +297,14 @@ module Anyspec
           deep_set(obj.dup, path, value)
         end
 
+        register('set_key') do |args, interp, loc|
+          obj, key, value = args
+          raise_unless_hash(obj, 'set_key', loc)
+          result = obj.dup
+          result[key] = value
+          result
+        end
+
         register('eq') do |args, interp, loc|
           a, b = args
           a == b

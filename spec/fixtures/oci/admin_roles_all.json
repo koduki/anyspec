@@ -1,0 +1,30 @@
+{
+  "data": {
+    "resources": [
+      {
+        "admin-role": true,
+        "app": {
+          "display": "IDCS Application",
+          "name": "IDCSApp",
+          "value": "IDCSAppId"
+        },
+        "display-name": "Identity Domain Administrator",
+        "id": "IdentityDomainAdminRoleId",
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:AppRole"]
+      },
+      {
+        "admin-role": true,
+        "app": {
+          "display": "IDCS Application",
+          "name": "IDCSApp",
+          "value": "IDCSAppId"
+        },
+        "display-name": "Security Administrator",
+        "id": "SecurityAdminRoleId",
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:AppRole"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "2"
+}

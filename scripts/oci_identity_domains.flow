@@ -27,12 +27,17 @@ foreach domain in $all_domains {
   $endpoint = $domain.url
   $domain_name = $domain["display-name"]
   
-  # Initialize domain collection
-  $domain_data = { "meta": {}, "collections": {} }
-  $domain_data = set_at $domain_data 'meta.id' $domain_id
-  $domain_data = set_at $domain_data 'meta.name' $domain_name
-  $domain_data = set_at $domain_data 'meta.url' $endpoint
-  $domain_data = set_at $domain_data 'meta.compartment-id' $domain["compartment-id"]
+  # Initialize domain collection with full meta
+  $domain_meta = {
+    "id": $domain_id,
+    "name": $domain_name,
+    "url": $endpoint,
+    "compartment-id": $domain["compartment-id"],
+    "lifecycle-state": $domain["lifecycle-state"],
+    "type": $domain.type,
+    "home-region": $domain["home-region"]
+  }
+  $domain_data = { "meta": $domain_meta, "collections": {} }
   
   # Collect Policies with required attributes
   $policies = oci_domain_list $endpoint 'policies' 'id,name,active,policyType,rules'
@@ -88,13 +93,12 @@ foreach domain in $all_domains {
   $kmsi_settings = oci_domain_singleton $endpoint 'kmsi-settings'
   $domain_data = set_at $domain_data 'collections.kmsiSettings' $kmsi_settings
   
-  # Collect SsoSettings via raw-request
+  # Collect SsoSettings via raw-request (returns array of resources)
   $sso_settings = oci_raw_get $endpoint '/admin/v1/SsoSettings'
-  $sso_list = if_then (is_array $sso_settings) $sso_settings [$sso_settings]
-  $domain_data = set_at $domain_data 'collections.ssoSettings' $sso_list
+  $domain_data = set_at $domain_data 'collections.ssoSettings' $sso_settings
   
-  # Collect Apps with policy references
-  $apps = oci_domain_list $endpoint 'apps' 'id,name,displayName,active,appSignonPolicy,idpPolicy'
+  # Collect Apps with policy references (no --attributes to get all fields including nested refs)
+  $apps = oci_domain_list $endpoint 'apps' null
   $domain_data = set_at $domain_data 'collections.apps' $apps
   
   # Collect admin AppRoles
@@ -103,31 +107,26 @@ foreach domain in $all_domains {
   $admin_role_ids = map $admin_roles 'id'
   $domain_data = set_at $domain_data 'collections.adminAppRoles' $admin_roles
   
-  # Collect Grants for admin roles
-  $all_admin_grants = []
-  foreach role in $admin_roles {
+  # Collect Grants for admin roles using SCIM bracket syntax for multi-valued complex attrs
+  $grants_per_role = foreach role in $admin_roles {
     $role_id = $role.id
-    $filter = scim_filter 'entitlement.attributeValue' 'eq' $role_id
-    $full_filter = "entitlement.attributeName eq \"appRoles\" and $filter"
-    $grants = oci_domain_list_filtered $endpoint 'grants' $full_filter null
-    $all_admin_grants = concat $all_admin_grants $grants
+    # SCIM filter for multi-valued complex attribute: entitlement[attributeName eq X and attributeValue eq Y]
+    $full_filter = "entitlement[attributeName eq \"appRoles\" and attributeValue eq \"$role_id\"]"
+    oci_domain_list_filtered $endpoint 'grants' $full_filter null
   }
-  $all_admin_grants = flatten $all_admin_grants 1
+  $all_admin_grants = flatten $grants_per_role
   $all_admin_grants = unique_by $all_admin_grants 'id'
   $domain_data = set_at $domain_data 'collections.adminGrants' $all_admin_grants
   
-  # Extract grantee references
-  $grantee_users = []
-  $grantee_groups = []
-  foreach grant in $all_admin_grants {
+  # Extract grantee references using foreach result collection pattern
+  $grantee_data = foreach grant in $all_admin_grants {
     $grantee = $grant.grantee
     $grantee_type = get_opt $grantee 'type' null
     $grantee_value = get_opt $grantee 'value' null
-    $is_user = eq $grantee_type 'User'
-    $is_group = eq $grantee_type 'Group'
-    $grantee_users = if_then $is_user (concat $grantee_users [$grantee_value]) $grantee_users
-    $grantee_groups = if_then $is_group (concat $grantee_groups [$grantee_value]) $grantee_groups
+    { "type": $grantee_type, "value": $grantee_value }
   }
+  $grantee_users = map (filter $grantee_data 'type' 'User') 'value'
+  $grantee_groups = map (filter $grantee_data 'type' 'Group') 'value'
   
   # Get Administrators group
   $admin_group_filter = 'displayName eq "Administrators"'
@@ -135,14 +134,14 @@ foreach domain in $all_domains {
   $admin_group = first $admin_groups
   $admin_group_id = get_opt $admin_group 'id' null
   
-  # Collect condition references to groups/users
-  $condition_group_refs = []
-  $condition_user_refs = []
-  foreach cond in $conditions {
-    $refs = extract_condition_refs $cond
-    $condition_group_refs = concat $condition_group_refs $refs.groups
-    $condition_user_refs = concat $condition_user_refs $refs.users
+  # Collect condition references to groups/users using foreach result collection
+  $condition_refs = foreach cond in $conditions {
+    extract_condition_refs $cond
   }
+  $condition_group_refs_lists = map $condition_refs 'groups'
+  $condition_user_refs_lists = map $condition_refs 'users'
+  $condition_group_refs = flatten $condition_group_refs_lists
+  $condition_user_refs = flatten $condition_user_refs_lists
   
   # Determine target groups: admin grants + Administrators + condition refs
   $target_group_ids = concat $grantee_groups [$admin_group_id]
@@ -150,17 +149,17 @@ foreach domain in $all_domains {
   $target_group_ids = compact $target_group_ids
   $target_group_ids = unique $target_group_ids
   
-  # Collect target groups with members
-  $target_groups = []
-  $group_member_users = []
-  foreach gid in $target_group_ids {
+  # Collect target groups with members using foreach result collection
+  $target_groups_with_members = foreach gid in $target_group_ids {
     $group = oci_domain_get $endpoint 'group' $gid
     $members = oci_group_members $endpoint $gid
-    $group = set_at $group 'members' $members
-    $target_groups = concat $target_groups [$group]
+    $group_with_members = set_at $group 'members' $members
     $member_user_ids = map $members 'value'
-    $group_member_users = concat $group_member_users $member_user_ids
+    { "group": $group_with_members, "member_ids": $member_user_ids }
   }
+  $target_groups = map $target_groups_with_members 'group'
+  $member_ids_lists = map $target_groups_with_members 'member_ids'
+  $group_member_users = flatten $member_ids_lists
   $domain_data = set_at $domain_data 'collections.targetGroups' $target_groups
   
   # Determine target users: admin grants + group members + condition refs
@@ -169,11 +168,9 @@ foreach domain in $all_domains {
   $target_user_ids = compact $target_user_ids
   $target_user_ids = unique $target_user_ids
   
-  # Collect target users
-  $target_users = []
-  foreach uid in $target_user_ids {
-    $user = oci_domain_get $endpoint 'user' $uid
-    $target_users = concat $target_users [$user]
+  # Collect target users using foreach result collection
+  $target_users = foreach uid in $target_user_ids {
+    oci_domain_get $endpoint 'user' $uid
   }
   $domain_data = set_at $domain_data 'collections.targetUsers' $target_users
   
@@ -203,20 +200,20 @@ foreach domain in $all_domains {
     }
   }
   
-  # App -> Policy references
+  # App -> Policy references (CLI returns kebab-case: signon-policy, idp-policy)
   foreach app in $apps {
-    $signon_policy = get_opt $app 'appSignonPolicy' null
-    $idp_policy = get_opt $app 'idpPolicy' null
+    $signon_policy = get_opt $app 'signon-policy' null
+    $idp_policy = get_opt $app 'idp-policy' null
     $signon_ref = get_opt $signon_policy 'value' null
     $idp_ref = get_opt $idp_policy 'value' null
     $policies_by_id = index_by $policies 'id'
     $signon_warnings = if_then (not_eq $signon_ref null) (check_ref_integrity [$signon_ref] $policies_by_id 'Policy') []
     $idp_warnings = if_then (not_eq $idp_ref null) (check_ref_integrity [$idp_ref] $policies_by_id 'Policy') []
     foreach w in $signon_warnings {
-      warn "App '${app.name}' appSignonPolicy: $w"
+      warn "App '${app.name}' signon-policy: $w"
     }
     foreach w in $idp_warnings {
-      warn "App '${app.name}' idpPolicy: $w"
+      warn "App '${app.name}' idp-policy: $w"
     }
   }
   
@@ -235,8 +232,10 @@ foreach domain in $all_domains {
   # Sort keys for consistent output
   $domain_data = sort_keys $domain_data
   
-  # Store domain data
-  $result = set_at $result "domains.$domain_id" $domain_data
+  # Store domain data (use set_key to preserve dots in OCID)
+  $domains = get_opt $result 'domains' {}
+  $domains = set_key $domains $domain_id $domain_data
+  $result = set_at $result 'domains' $domains
 }
 
 # Return result

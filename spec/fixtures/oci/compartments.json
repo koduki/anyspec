@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "compartment-id": "ocid1.tenancy.oc1..aaaaaaaatesttenancy",
+      "defined-tags": {},
+      "description": "Test Tenancy Root",
+      "freeform-tags": {},
+      "id": "ocid1.tenancy.oc1..aaaaaaaatesttenancy",
+      "inactive-status": null,
+      "is-accessible": true,
+      "lifecycle-state": "ACTIVE",
+      "name": "test-tenancy",
+      "time-created": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "compartment-id": "ocid1.tenancy.oc1..aaaaaaaatesttenancy",
+      "defined-tags": {},
+      "description": "Test Compartment",
+      "freeform-tags": {},
+      "id": "ocid1.compartment.oc1..aaaaaaaatestcompartment",
+      "inactive-status": null,
+      "is-accessible": true,
+      "lifecycle-state": "ACTIVE",
+      "name": "test-compartment",
+      "time-created": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}

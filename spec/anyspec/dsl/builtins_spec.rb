@@ -312,6 +312,34 @@ RSpec.describe Anyspec::DSL::Builtins do
       end
     end
 
+    describe 'set_key' do
+      it 'sets key without splitting dots' do
+        result = run(<<~DSL)
+          $obj = {}
+          set_key $obj 'ocid1.domain.oc1..aaa' 'value'
+        DSL
+        expect(result['ocid1.domain.oc1..aaa']).to eq('value')
+      end
+
+      it 'preserves existing keys' do
+        result = run(<<~DSL)
+          $obj = { "existing": 1 }
+          set_key $obj 'new.key' 2
+        DSL
+        expect(result['existing']).to eq(1)
+        expect(result['new.key']).to eq(2)
+      end
+
+      it 'can set complex values' do
+        result = run(<<~DSL)
+          $obj = {}
+          $nested = { "a": 1, "b": 2 }
+          set_key $obj 'key.with.dots' $nested
+        DSL
+        expect(result['key.with.dots']).to eq({ 'a' => 1, 'b' => 2 })
+      end
+    end
+
     describe 'eq and not_eq' do
       it 'compares values' do
         expect(run('eq 1 1')).to be true
