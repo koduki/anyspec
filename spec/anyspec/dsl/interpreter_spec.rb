@@ -117,6 +117,15 @@ RSpec.describe Anyspec::DSL::Interpreter do
       DSL
       expect(result).to eq([1, 2, 3])
     end
+
+    it 'passes false and null instead of retaining a prior value' do
+      expect(run("$x = 'stale'\n$x | eq 1 2 | default $_ 'fallback'")).to be(false)
+      expect(run("$x = 'stale'\n$x | first [] | default $_ 'fallback'")).to eq('fallback')
+    end
+
+    it 'passes false through a pipeline inside foreach' do
+      expect(run("foreach x in [1, 2] {\n$x | eq 1 2 | default $_ 'fallback'\n}")).to eq([false, false])
+    end
   end
 
   describe 'parenthesized expressions' do

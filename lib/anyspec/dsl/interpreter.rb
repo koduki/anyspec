@@ -119,8 +119,8 @@ module Anyspec
 
       def evaluate_pipeline(node)
         result = nil
-        node.commands.each do |cmd|
-          @env.set('_', result) if result
+        node.commands.each_with_index do |cmd, index|
+          @env.set('_', result) if index.positive?
           result = evaluate(cmd)
         end
         result
