@@ -1,0 +1,153 @@
+# frozen_string_literal: true
+
+require 'spec_helper'
+require 'anyspec/dsl/ast'
+require 'anyspec/dsl/lexer'
+require 'anyspec/dsl/parser'
+
+RSpec.describe Anyspec::DSL::Parser do
+  def parse(source)
+    lexer = Anyspec::DSL::Lexer.new(source, file: '<test>')
+    tokens = lexer.tokenize
+    parser = described_class.new(tokens, file: '<test>')
+    parser.parse
+  end
+
+  describe 'assignments' do
+    it 'parses variable assignment with literal' do
+      program = parse('$foo = 42')
+      expect(program.statements.length).to eq(1)
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Assignment)
+      expect(stmt.name).to eq('foo')
+      expect(stmt.value).to be_a(Anyspec::DSL::AST::NumberLiteral)
+      expect(stmt.value.value).to eq(42)
+    end
+
+    it 'parses variable assignment with string' do
+      program = parse("$name = 'hello'")
+      stmt = program.statements.first
+      expect(stmt.value).to be_a(Anyspec::DSL::AST::StringLiteral)
+      expect(stmt.value.value).to eq('hello')
+    end
+
+    it 'parses variable assignment with array' do
+      program = parse('$arr = [1, 2, 3]')
+      stmt = program.statements.first
+      expect(stmt.value).to be_a(Anyspec::DSL::AST::ArrayLiteral)
+      expect(stmt.value.elements.length).to eq(3)
+    end
+  end
+
+  describe 'commands' do
+    it 'parses simple command' do
+      program = parse('oci iam domain list')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Command)
+      expect(stmt.name).to eq('oci')
+      expect(stmt.arguments.length).to eq(3)
+    end
+
+    it 'parses command with flags' do
+      program = parse('oci iam domain list --compartment-id $cid --all')
+      stmt = program.statements.first
+      expect(stmt.arguments.length).to eq(6)
+    end
+
+    it 'parses command with string arguments' do
+      program = parse("filter_by 'status' 'active'")
+      stmt = program.statements.first
+      expect(stmt.name).to eq('filter_by')
+      expect(stmt.arguments.length).to eq(2)
+    end
+  end
+
+  describe 'pipelines' do
+    it 'parses single pipe' do
+      program = parse('foo | bar')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Pipeline)
+      expect(stmt.commands.length).to eq(2)
+    end
+
+    it 'parses multiple pipes' do
+      program = parse('foo | bar | baz')
+      stmt = program.statements.first
+      expect(stmt.commands.length).to eq(3)
+    end
+  end
+
+  describe 'foreach' do
+    it 'parses foreach loop' do
+      program = parse("foreach item in $items {\n  $x = $item.id\n}")
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::Foreach)
+      expect(stmt.variable).to eq('item')
+      expect(stmt.body.length).to eq(1)
+    end
+  end
+
+  describe 'field access' do
+    it 'parses dot notation' do
+      program = parse('$obj.field')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::FieldAccess)
+      expect(stmt.field).to eq('field')
+    end
+
+    it 'parses chained dot notation' do
+      program = parse('$obj.a.b.c')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::FieldAccess)
+      expect(stmt.field).to eq('c')
+    end
+
+    it 'parses bracket notation' do
+      program = parse('$obj["key"]')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::IndexAccess)
+    end
+  end
+
+  describe 'string interpolation' do
+    it 'parses interpolated strings' do
+      program = parse('"hello $name"')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::StringLiteral)
+      expect(stmt.interpolated?).to be true
+      expect(stmt.interpolations).to eq(['name'])
+    end
+
+    it 'parses complex interpolation' do
+      program = parse('"Value: ${foo}"')
+      stmt = program.statements.first
+      expect(stmt.interpolations).to eq(['foo'])
+    end
+  end
+
+  describe 'literals' do
+    it 'parses booleans' do
+      program = parse('true')
+      expect(program.statements.first).to be_a(Anyspec::DSL::AST::BooleanLiteral)
+      expect(program.statements.first.value).to be true
+    end
+
+    it 'parses null' do
+      program = parse('null')
+      expect(program.statements.first).to be_a(Anyspec::DSL::AST::NullLiteral)
+    end
+
+    it 'parses hash literals' do
+      program = parse('{ "key": "value" }')
+      stmt = program.statements.first
+      expect(stmt).to be_a(Anyspec::DSL::AST::HashLiteral)
+      expect(stmt.pairs.length).to eq(1)
+    end
+  end
+
+  describe 'error handling' do
+    it 'includes location in error' do
+      expect { parse('$x =') }.to raise_error(Anyspec::DSL::ParseError, /<test>:1:\d+/)
+    end
+  end
+end

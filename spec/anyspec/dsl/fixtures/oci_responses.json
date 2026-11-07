@@ -1,0 +1,249 @@
+{
+  "compartments": {
+    "data": [
+      {
+        "id": "ocid1.compartment.oc1..test1",
+        "compartment-id": "ocid1.tenancy.oc1..root",
+        "name": "root",
+        "lifecycle-state": "ACTIVE"
+      },
+      {
+        "id": "ocid1.compartment.oc1..test2",
+        "compartment-id": "ocid1.tenancy.oc1..root",
+        "name": "production",
+        "lifecycle-state": "ACTIVE"
+      }
+    ]
+  },
+  "domains": {
+    "data": [
+      {
+        "id": "ocid1.domain.oc1..testdomain",
+        "compartment-id": "ocid1.compartment.oc1..test1",
+        "display-name": "TestDomain",
+        "url": "https://idcs-test.identity.oraclecloud.com",
+        "lifecycle-state": "ACTIVE"
+      }
+    ]
+  },
+  "policies": {
+    "Resources": [
+      {
+        "id": "pol1",
+        "name": "SignOnPolicy",
+        "active": true,
+        "policyType": { "value": "SignOn" },
+        "rules": [
+          { "value": "rule1", "sequence": 1 },
+          { "value": "rule2", "sequence": 2 }
+        ]
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "rules": {
+    "Resources": [
+      {
+        "id": "rule1",
+        "name": "DefaultRule",
+        "conditionGroup": {
+          "type": "Condition",
+          "value": "cond1"
+        }
+      },
+      {
+        "id": "rule2",
+        "name": "MFARule",
+        "conditionGroup": {
+          "type": "ConditionGroup",
+          "value": "cg1"
+        }
+      }
+    ],
+    "totalResults": 2,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "conditions": {
+    "Resources": [
+      {
+        "id": "cond1",
+        "name": "IPCondition",
+        "attributeName": "user.ipAddress",
+        "attributeValue": "#inIPRange(\"np1\")"
+      },
+      {
+        "id": "cond2",
+        "name": "GroupCondition",
+        "attributeName": "user.memberOf",
+        "attributeValue": "grp1"
+      }
+    ],
+    "totalResults": 2,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "networkPerimeters": {
+    "Resources": [
+      {
+        "id": "np1",
+        "name": "CorporateNetwork",
+        "ipAddresses": ["10.0.0.0/8", "192.168.0.0/16"]
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "conditionGroups": {
+    "Resources": [
+      {
+        "id": "cg1",
+        "name": "MFAConditionGroup",
+        "conditions": [
+          { "type": "Condition", "value": "cond1" },
+          { "type": "Condition", "value": "cond2" }
+        ]
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "apps": {
+    "Resources": [
+      {
+        "id": "app1",
+        "name": "TestApp",
+        "displayName": "Test Application",
+        "active": true,
+        "appSignonPolicy": { "value": "pol1" }
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "appRoles": {
+    "Resources": [
+      {
+        "id": "role1",
+        "displayName": "Identity Domain Administrator",
+        "adminRole": true,
+        "app": { "value": "IDCSAppId" }
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "grants": {
+    "Resources": [
+      {
+        "id": "grant1",
+        "grantee": {
+          "type": "User",
+          "value": "user1"
+        },
+        "entitlement": {
+          "attributeName": "appRoles",
+          "attributeValue": "role1"
+        }
+      },
+      {
+        "id": "grant2",
+        "grantee": {
+          "type": "Group",
+          "value": "grp1"
+        },
+        "entitlement": {
+          "attributeName": "appRoles",
+          "attributeValue": "role1"
+        }
+      }
+    ],
+    "totalResults": 2,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "adminGroups": {
+    "Resources": [
+      {
+        "id": "admin-grp",
+        "displayName": "Administrators"
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "group": {
+    "id": "grp1",
+    "displayName": "TestGroup",
+    "members": [
+      { "value": "user1", "type": "User" },
+      { "value": "user2", "type": "User" }
+    ]
+  },
+  "user": {
+    "id": "user1",
+    "userName": "testuser",
+    "emails": [
+      { "value": "test@example.com", "primary": true }
+    ]
+  },
+  "authFactorSettings": {
+    "Resources": [
+      {
+        "id": "afs1",
+        "mfaEnrollmentType": "Optional",
+        "pushEnabled": true
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "kmsiSettings": {
+    "Resources": [
+      {
+        "id": "kmsi1",
+        "kmsiFeatureEnabled": false,
+        "maxAllowedSessions": 5
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "ssoSettings": {
+    "id": "sso1",
+    "externalLogoutEnabled": false
+  },
+  "identityProviders": {
+    "Resources": [],
+    "totalResults": 0,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "socialIdentityProviders": {
+    "Resources": [],
+    "totalResults": 0,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  },
+  "passwordPolicies": {
+    "Resources": [
+      {
+        "id": "pp1",
+        "name": "DefaultPasswordPolicy",
+        "minLength": 12
+      }
+    ],
+    "totalResults": 1,
+    "startIndex": 1,
+    "itemsPerPage": 100
+  }
+}

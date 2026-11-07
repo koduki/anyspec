@@ -1,0 +1,244 @@
+# OCI Identity Domains Configuration Collector
+# Collects security-related configuration from all Identity Domains in a tenancy
+
+# Initialize result structure
+$result = { "domains": {}, "warnings": [] }
+$collected_warnings = []
+
+# Get tenancy OCID from environment
+$tenancy_ocid = $TENANCY_OCID
+
+# Step 1: List all compartments including root
+$compartments = oci_list_compartments $tenancy_ocid
+$active_compartments = filter $compartments 'lifecycle-state' 'ACTIVE'
+
+# Step 2: Discover all domains across compartments
+$all_domains = []
+foreach compartment in $active_compartments {
+  $cid = $compartment.id
+  $domains = oci_list_domains $cid
+  $active_domains = filter $domains 'lifecycle-state' 'ACTIVE'
+  concat $all_domains $active_domains | flatten
+}
+$all_domains = unique_by $all_domains 'id'
+
+# Step 3: For each domain, collect configuration
+foreach domain in $all_domains {
+  $domain_id = $domain.id
+  $endpoint = $domain.url
+  $domain_name = $domain["display-name"]
+  
+  # Initialize domain collection
+  $domain_data = { "meta": {}, "collections": {} }
+  $domain_data = set_at $domain_data 'meta.id' $domain_id
+  $domain_data = set_at $domain_data 'meta.name' $domain_name
+  $domain_data = set_at $domain_data 'meta.url' $endpoint
+  $domain_data = set_at $domain_data 'meta.compartment-id' $domain["compartment-id"]
+  
+  # Collect Policies with required attributes
+  $policies = oci_domain_list $endpoint 'policies' 'id,name,active,policyType,rules'
+  
+  # Validate rule sequences and collect warnings
+  foreach policy in $policies {
+    $policy_name = $policy.name
+    $rules_refs = get_opt $policy 'rules' []
+    $seq_warnings = validate_sequence $rules_refs $policy_name
+    foreach w in $seq_warnings {
+      warn $w
+    }
+  }
+  $domain_data = set_at $domain_data 'collections.policies' $policies
+  
+  # Collect Rules
+  $rules = oci_domain_list $endpoint 'rules' null
+  $rules_by_id = index_by $rules 'id'
+  $domain_data = set_at $domain_data 'collections.rules' $rules
+  
+  # Collect Conditions
+  $conditions = oci_domain_list $endpoint 'conditions' null
+  $conditions_by_id = index_by $conditions 'id'
+  $domain_data = set_at $domain_data 'collections.conditions' $conditions
+  
+  # Collect NetworkPerimeters
+  $network_perimeters = oci_domain_list $endpoint 'network-perimeters' null
+  $network_perimeters_by_id = index_by $network_perimeters 'id'
+  $domain_data = set_at $domain_data 'collections.networkPerimeters' $network_perimeters
+  
+  # Collect ConditionGroups via raw-request
+  $condition_groups = oci_raw_get $endpoint '/admin/v1/ConditionGroups'
+  $condition_groups_by_id = index_by $condition_groups 'id'
+  $domain_data = set_at $domain_data 'collections.conditionGroups' $condition_groups
+  
+  # Collect IdentityProviders
+  $identity_providers = oci_domain_list $endpoint 'identity-providers' null
+  $domain_data = set_at $domain_data 'collections.identityProviders' $identity_providers
+  
+  # Collect SocialIdentityProviders
+  $social_providers = oci_domain_list $endpoint 'social-identity-providers' null
+  $domain_data = set_at $domain_data 'collections.socialIdentityProviders' $social_providers
+  
+  # Collect PasswordPolicies
+  $password_policies = oci_domain_list $endpoint 'password-policies' null
+  $domain_data = set_at $domain_data 'collections.passwordPolicies' $password_policies
+  
+  # Collect AuthenticationFactorSettings (singleton)
+  $auth_factor_settings = oci_domain_singleton $endpoint 'authentication-factor-settings'
+  $domain_data = set_at $domain_data 'collections.authenticationFactorSettings' $auth_factor_settings
+  
+  # Collect KmsiSettings (singleton)
+  $kmsi_settings = oci_domain_singleton $endpoint 'kmsi-settings'
+  $domain_data = set_at $domain_data 'collections.kmsiSettings' $kmsi_settings
+  
+  # Collect SsoSettings via raw-request
+  $sso_settings = oci_raw_get $endpoint '/admin/v1/SsoSettings'
+  $sso_list = if_then (is_array $sso_settings) $sso_settings [$sso_settings]
+  $domain_data = set_at $domain_data 'collections.ssoSettings' $sso_list
+  
+  # Collect Apps with policy references
+  $apps = oci_domain_list $endpoint 'apps' 'id,name,displayName,active,appSignonPolicy,idpPolicy'
+  $domain_data = set_at $domain_data 'collections.apps' $apps
+  
+  # Collect admin AppRoles
+  $all_app_roles = oci_domain_list_filtered $endpoint 'app-roles' 'adminRole eq true' null
+  $admin_roles = find_admin_roles $all_app_roles
+  $admin_role_ids = map $admin_roles 'id'
+  $domain_data = set_at $domain_data 'collections.adminAppRoles' $admin_roles
+  
+  # Collect Grants for admin roles
+  $all_admin_grants = []
+  foreach role in $admin_roles {
+    $role_id = $role.id
+    $filter = scim_filter 'entitlement.attributeValue' 'eq' $role_id
+    $full_filter = "entitlement.attributeName eq \"appRoles\" and $filter"
+    $grants = oci_domain_list_filtered $endpoint 'grants' $full_filter null
+    $all_admin_grants = concat $all_admin_grants $grants
+  }
+  $all_admin_grants = flatten $all_admin_grants 1
+  $all_admin_grants = unique_by $all_admin_grants 'id'
+  $domain_data = set_at $domain_data 'collections.adminGrants' $all_admin_grants
+  
+  # Extract grantee references
+  $grantee_users = []
+  $grantee_groups = []
+  foreach grant in $all_admin_grants {
+    $grantee = $grant.grantee
+    $grantee_type = get_opt $grantee 'type' null
+    $grantee_value = get_opt $grantee 'value' null
+    $is_user = eq $grantee_type 'User'
+    $is_group = eq $grantee_type 'Group'
+    $grantee_users = if_then $is_user (concat $grantee_users [$grantee_value]) $grantee_users
+    $grantee_groups = if_then $is_group (concat $grantee_groups [$grantee_value]) $grantee_groups
+  }
+  
+  # Get Administrators group
+  $admin_group_filter = 'displayName eq "Administrators"'
+  $admin_groups = oci_domain_list_filtered $endpoint 'groups' $admin_group_filter null
+  $admin_group = first $admin_groups
+  $admin_group_id = get_opt $admin_group 'id' null
+  
+  # Collect condition references to groups/users
+  $condition_group_refs = []
+  $condition_user_refs = []
+  foreach cond in $conditions {
+    $refs = extract_condition_refs $cond
+    $condition_group_refs = concat $condition_group_refs $refs.groups
+    $condition_user_refs = concat $condition_user_refs $refs.users
+  }
+  
+  # Determine target groups: admin grants + Administrators + condition refs
+  $target_group_ids = concat $grantee_groups [$admin_group_id]
+  $target_group_ids = concat $target_group_ids $condition_group_refs
+  $target_group_ids = compact $target_group_ids
+  $target_group_ids = unique $target_group_ids
+  
+  # Collect target groups with members
+  $target_groups = []
+  $group_member_users = []
+  foreach gid in $target_group_ids {
+    $group = oci_domain_get $endpoint 'group' $gid
+    $members = oci_group_members $endpoint $gid
+    $group = set_at $group 'members' $members
+    $target_groups = concat $target_groups [$group]
+    $member_user_ids = map $members 'value'
+    $group_member_users = concat $group_member_users $member_user_ids
+  }
+  $domain_data = set_at $domain_data 'collections.targetGroups' $target_groups
+  
+  # Determine target users: admin grants + group members + condition refs
+  $target_user_ids = concat $grantee_users $group_member_users
+  $target_user_ids = concat $target_user_ids $condition_user_refs
+  $target_user_ids = compact $target_user_ids
+  $target_user_ids = unique $target_user_ids
+  
+  # Collect target users
+  $target_users = []
+  foreach uid in $target_user_ids {
+    $user = oci_domain_get $endpoint 'user' $uid
+    $target_users = concat $target_users [$user]
+  }
+  $domain_data = set_at $domain_data 'collections.targetUsers' $target_users
+  
+  # Validate references
+  # Policy -> Rule references
+  foreach policy in $policies {
+    $policy_rules = get_opt $policy 'rules' []
+    $rule_refs = map $policy_rules 'value'
+    $warnings = check_ref_integrity $rule_refs $rules_by_id 'Rule'
+    foreach w in $warnings {
+      warn "Policy '${policy.name}': $w"
+    }
+  }
+  
+  # Rule -> Condition/ConditionGroup references
+  foreach rule in $rules {
+    $cg_ref = get_opt $rule 'conditionGroup' null
+    $cg_type = get_opt $cg_ref 'type' null
+    $cg_value = get_opt $cg_ref 'value' null
+    $is_condition = eq $cg_type 'Condition'
+    $is_cond_group = eq $cg_type 'ConditionGroup'
+    $cond_warnings = if_then $is_condition (check_ref_integrity [$cg_value] $conditions_by_id 'Condition') []
+    $cg_warnings = if_then $is_cond_group (check_ref_integrity [$cg_value] $condition_groups_by_id 'ConditionGroup') []
+    $all_cond_warnings = concat $cond_warnings $cg_warnings
+    foreach w in $all_cond_warnings {
+      warn "Rule '${rule.name}': $w"
+    }
+  }
+  
+  # App -> Policy references
+  foreach app in $apps {
+    $signon_policy = get_opt $app 'appSignonPolicy' null
+    $idp_policy = get_opt $app 'idpPolicy' null
+    $signon_ref = get_opt $signon_policy 'value' null
+    $idp_ref = get_opt $idp_policy 'value' null
+    $policies_by_id = index_by $policies 'id'
+    $signon_warnings = if_then (not_eq $signon_ref null) (check_ref_integrity [$signon_ref] $policies_by_id 'Policy') []
+    $idp_warnings = if_then (not_eq $idp_ref null) (check_ref_integrity [$idp_ref] $policies_by_id 'Policy') []
+    foreach w in $signon_warnings {
+      warn "App '${app.name}' appSignonPolicy: $w"
+    }
+    foreach w in $idp_warnings {
+      warn "App '${app.name}' idpPolicy: $w"
+    }
+  }
+  
+  # NetworkPerimeter references in conditions
+  foreach cond in $conditions {
+    $attr_value = get_opt $cond 'attributeValue' null
+    $ip_refs = extract_iprange_refs $attr_value
+    foreach ref in $ip_refs {
+      $np_warnings = check_ref_integrity [$ref] $network_perimeters_by_id 'NetworkPerimeter'
+      foreach w in $np_warnings {
+        warn "Condition '${cond.name}': $w"
+      }
+    }
+  }
+  
+  # Sort keys for consistent output
+  $domain_data = sort_keys $domain_data
+  
+  # Store domain data
+  $result = set_at $result "domains.$domain_id" $domain_data
+}
+
+# Return result
+$result
