@@ -1,0 +1,18 @@
+{
+  "data": {
+    "resources": [
+      {
+        "id": "TestAdminGroupId",
+        "display-name": "Administrators",
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"]
+      },
+      {
+        "id": "TestUsersGroupId",
+        "display-name": "All Domain Users",
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "2"
+}

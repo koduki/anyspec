@@ -1,0 +1,7 @@
+{
+  "data": "{\"Resources\":[{\"id\":\"TestConditionGroup1\",\"name\":\"TestConditionGroup1\",\"conditions\":[{\"type\":\"Condition\",\"value\":\"TestCondition1\"},{\"type\":\"Condition\",\"value\":\"TestCondition2\"}],\"schemas\":[\"urn:ietf:params:scim:schemas:oracle:idcs:ConditionGroup\"]}],\"totalResults\":1,\"startIndex\":1,\"itemsPerPage\":50,\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:ListResponse\"]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": "200 OK"
+}

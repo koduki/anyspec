@@ -1,0 +1,17 @@
+{
+  "data": {
+    "resources": [
+      {
+        "id": "KmsiSettings",
+        "kmsi-feature-enabled": true,
+        "kmsi-prompt-enabled": true,
+        "last-enabled-on": "2024-01-01T00:00:00.000Z",
+        "max-allowed-sessions": 5,
+        "token-validity-in-days": 14,
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:KmsiSettings"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "1"
+}

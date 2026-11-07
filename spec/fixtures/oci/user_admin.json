@@ -1,0 +1,20 @@
+{
+  "data": {
+    "id": "TestAdminUserId",
+    "user-name": "test.admin@example.com",
+    "name": {
+      "family-name": "Admin",
+      "given-name": "Test"
+    },
+    "emails": [
+      {
+        "value": "test.admin@example.com",
+        "type": "work",
+        "primary": true
+      }
+    ],
+    "active": true,
+    "user-type": "Employee",
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"]
+  }
+}

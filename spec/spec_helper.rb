@@ -5,6 +5,8 @@ require 'anyspec'
 
 FAKE_OCI_CLI = File.expand_path('support/fake_oci_cli', __dir__)
 
+Dir[File.expand_path('support/**/*.rb', __dir__)].each { |f| require f }
+
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true

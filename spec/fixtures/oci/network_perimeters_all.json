@@ -1,0 +1,18 @@
+{
+  "data": {
+    "resources": [
+      {
+        "id": "TestNetworkPerimeter1",
+        "name": "Corporate Network",
+        "description": "Corporate office IP ranges",
+        "ip-addresses": [
+          { "type": "RANGE", "value": "10.0.0.0-10.255.255.255" },
+          { "type": "CIDR", "value": "192.168.1.0/24" }
+        ],
+        "schemas": ["urn:ietf:params:scim:schemas:oracle:idcs:NetworkPerimeter"]
+      }
+    ],
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+  },
+  "opc-total-items": "1"
+}
