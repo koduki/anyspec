@@ -260,8 +260,27 @@ module Anyspec
             response = @executor.execute(cmd, location: location, preserve_envelope: true)
             body = raw_response_body(response, location: location)
 
-            resources = body['Resources'] || body['resources'] || []
-            total_results = body['totalResults'] || body['total-results'] || 0
+            total_value = body.key?('totalResults') ? body['totalResults'] : body['total-results']
+            total_results = parse_total(nil, total_value, location)
+            raise PaginationError.new('raw-request response has no totalResults', location) if total_results.nil?
+            if total_results > MAX_TOTAL_RESULTS
+              raise PaginationError.new("Total results exceeds maximum (#{MAX_TOTAL_RESULTS})", location)
+            end
+
+            resources = body['Resources'] || body['resources']
+            resources = [] if resources.nil? && total_results.zero?
+            unless resources.is_a?(Array)
+              raise PaginationError.new('raw-request response has no Resources array', location)
+            end
+
+            response_start = body['startIndex'] || body['start-index']
+            if response_start && parse_total(nil, response_start, location) != start_index
+              raise PaginationError.new("startIndex mismatch: expected #{start_index}, got #{response_start}", location)
+            end
+            response_count = body['itemsPerPage'] || body['items-per-page']
+            if response_count && parse_total(nil, response_count, location) < resources.length
+              raise PaginationError.new('itemsPerPage is smaller than the resource count', location)
+            end
 
             if initial_total.nil?
               initial_total = total_results
@@ -272,7 +291,15 @@ module Anyspec
               )
             end
 
+            if resources.empty? && all_resources.length < initial_total
+              raise PaginationError.new("Empty page before all results were received (#{all_resources.length}/#{initial_total})", location)
+            end
+            if all_resources.length + resources.length > initial_total
+              raise PaginationError.new("raw-request returned more resources than totalResults #{initial_total}", location)
+            end
+
             resources.each do |resource|
+              raise PaginationError.new('raw-request resource must be an object', location) unless resource.is_a?(Hash)
               id = resource['id']
               if id && seen_ids.include?(id)
                 raise PaginationError.new("Duplicate resource id in raw request: #{id}", location)
@@ -281,10 +308,9 @@ module Anyspec
               all_resources << resource
             end
 
-            break if resources.empty?
-            break if all_resources.length >= initial_total
+            break if all_resources.length == initial_total
 
-            start_index += count
+            start_index += resources.length
           end
 
           all_resources
